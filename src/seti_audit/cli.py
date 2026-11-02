@@ -23,10 +23,28 @@ def main(argv: list[str] | None = None) -> int:
     logged.add_argument("args", nargs=argparse.REMAINDER)
     environment = subcommands.add_parser("env", help="Record actual hardware and scientific environment")
     environment.add_argument("--out", type=Path, default=Path("results/environment.json"))
+    theorem = subcommands.add_parser("theorem-check", help="Independently verify finite-age continuum formulas")
+    theorem.add_argument("--deterministic", action="store_true")
+    theorem.add_argument("--source", type=Path, default=Path("docs/silence_contact_theorem.pdf"))
+    theorem.add_argument("--out", type=Path, default=Path("results/theorem"))
     for name in ("acquire", "validate-data"):
         command = subcommands.add_parser(name)
         command.add_argument("--config", type=Path, default=Path("config/protocol.json"))
     options = parser.parse_args(argv)
+    if options.command == "theorem-check":
+        from .theorem import check_theorem
+        ledger = ResourceLedger(Path("results/resources.jsonl"))
+        job, start = ledger.start("G1"), time.perf_counter()
+        try:
+            result = check_theorem(options.source, options.out)
+        except BaseException as exc:
+            ledger.finish(job, time.perf_counter() - start, 0, status="failed",
+                          details={"exception": type(exc).__name__})
+            raise
+        ledger.finish(job, time.perf_counter() - start, 0,
+                      details={"artifact": str(options.out / "deterministic.json")})
+        print(json.dumps({"status": result["status"], "checks": len(result["ratios"])}))
+        return 0
     if options.command == "env":
         result = inspect_environment()
         write_json_atomic(options.out, result)
