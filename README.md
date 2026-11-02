@@ -4,7 +4,7 @@ A reproducible research audit of what the UCLA 2020–2023 radio null says about
 
 The question is whether hearing no radio signals narrows the range of physical-arrival probabilities in the declared models. Radio silence and physical safety are different observations. Allowing an invisible counterpart of every model prevents full-family contraction; the conditional radio-bright comparison remains a separate numerical question.
 
-The [blueprint](docs/blueprint.md), [specification](docs/superpowers/specs/2026-11-02-seti-silence-audit-design.md), and [implementation plan](docs/superpowers/plans/2026-11-02-seti-silence-audit.md) define the experiment. The conditional research calculations are complete; final independent review is pending. No empirical arrival forecast is claimed.
+The [blueprint](docs/blueprint.md), [specification](docs/superpowers/specs/2026-11-02-seti-silence-audit-design.md), and [implementation plan](docs/superpowers/plans/2026-11-02-seti-silence-audit.md) define the experiment. The conditional research calculations are complete. The [independent review and verified fixes](docs/final_review.md) record the final checks. No empirical arrival forecast is claimed.
 
 The [evidence report](report/REPORT.md) finds material narrowing for persistent bright emitters: the upper model-risk envelope falls from about 11% to about 4% under the nominal detector, or below 8% across the assumed efficiency interval [.44,.94]. The faster-future-birth control also passes the declared narrowing criterion after matching baseline precision. These are conditional model results, not estimates of the real-world chance of alien visitors.
 
@@ -25,19 +25,26 @@ Python 3.12 on native ARM64 macOS is the verified environment. `requirements.loc
 
 The current input grade is verified published geometry, coarsened timing **F1**, and assumed detector response **F2**. All 62 published rows match the source table, with 61 physical sites after linking the repeated TOI 1730.01 visit. Public archive metadata are accessible, but the tested individual download routes return 401/403; the whole-dataset route reports that ZIP generation is unavailable for this dataset size. Saved evidence is under [inputs](inputs). Expected archive hashes remain metadata expectations until file bytes are verified. Candidate hits alone cannot prove scan completeness, including zero-hit scans.
 
-Run these commands from the checkout root:
+The current code regenerates the published report from saved aggregate evidence:
 
 ```bash
-python -m seti_audit env --out results/environment.json
+python -m seti_audit report --protocol results/protocol.lock.json --from-results
+```
+
+The published numerical run is pinned to commit `d21192c5428a1681fef1179530e8f06c53dde15b`. Reconstructing or continuing that historical run requires a separate checkout of that commit and its matching raw checkpoint store. The corrected current code has new execution hashes and deliberately rejects those old locks for sampling. Use the current code and a fresh output directory for a new experiment:
+
+```bash
+export SETI_RUN_DIR=results/new-audit
+python -m seti_audit env --out "$SETI_RUN_DIR/environment.json"
 python -m seti_audit acquire --config config/protocol.json
 python -m seti_audit validate-data --config config/protocol.json
-python -m seti_audit theorem-check --config config/protocol.json
+python -m seti_audit theorem-check --config config/protocol.json --out "$SETI_RUN_DIR/theorem"
 python -m seti_audit check
-python -m seti_audit calibrate --config config/protocol.json
-python -m seti_audit pilot --config config/protocol.json
-python -m seti_audit freeze --config config/protocol.json
-python -m seti_audit run --protocol results/protocol.lock.json
-python -m seti_audit report --protocol results/protocol.lock.json --from-results
+python -m seti_audit calibrate --config config/protocol.json --out "$SETI_RUN_DIR/calibration.json"
+python -m seti_audit pilot --config config/protocol.json --out "$SETI_RUN_DIR/pilot.json"
+python -m seti_audit freeze --config config/protocol.json --out "$SETI_RUN_DIR" --calibration "$SETI_RUN_DIR/calibration.json" --pilot "$SETI_RUN_DIR/pilot.json"
+python -m seti_audit run --protocol "$SETI_RUN_DIR/protocol.lock.json"
+python -m seti_audit report --protocol "$SETI_RUN_DIR/protocol.lock.json" --from-results
 ```
 
 `acquire` streams available sources, records access/integrity failures, and establishes the attained data grade. It does not turn an arbitrary retry count into evidence of unavailability. F1 retains the permitted date intervals and both 150-second ON durations; it invents no scan timestamps. F2 probabilities are detector assumptions, including Dpositive's positive floor. They are not empirical calibration confidence limits.
@@ -49,16 +56,16 @@ python -m seti_audit report --protocol results/protocol.lock.json --from-results
 For the continuous detector-efficiency comparison, the [refined numerical method](docs/continuous_efficiency_refinement.md) avoids the loose history-by-history full-range bound. Finish the current prescribed original checkpoint, verify and freeze the additional method, then run its independent confirmation:
 
 ```bash
-python -m seti_audit.refinement checkpoint --protocol results/protocol.lock.json
-python -m seti_audit check --out results/refinement/correctness.json
-python -m seti_audit.refinement freeze --protocol results/protocol.lock.json --out results/refinement
-python -m seti_audit.refinement run --protocol results/refinement/protocol.lock.json
-python -m seti_audit report --protocol results/protocol.lock.json --from-results
+python -m seti_audit.refinement checkpoint --protocol "$SETI_RUN_DIR/protocol.lock.json"
+python -m seti_audit check --out "$SETI_RUN_DIR/refinement/correctness.json"
+python -m seti_audit.refinement freeze --protocol "$SETI_RUN_DIR/protocol.lock.json" --out "$SETI_RUN_DIR/refinement"
+python -m seti_audit.refinement run --protocol "$SETI_RUN_DIR/refinement/protocol.lock.json"
+python -m seti_audit report --protocol "$SETI_RUN_DIR/protocol.lock.json" --from-results
 ```
 
 Use `--resume` on the refinement `run` command after interruption. Its confidence allowance comes from analytically zero-error ideal-S1 interval allocations, preserving the original total error allowance. It covers the full shared-efficiency interval, preserves original evidence, uses fresh stage-8 streams, and doubles precision as needed. The report keeps the original per-model rows and separately exports refined subdomains and the resulting family envelopes. An original checkpoint labeled `checkpoint_complete_refinement_pending` still requires this additional work.
 
-The published run resolved the remaining close comparison by matching its baseline precision at completed fresh look 4. This uses saved unweighted flags, all 52 declared interacting baselines, and a separate allowance from two certain free-shell CDF endpoints. The complete [method and confidence accounting](docs/continuous_efficiency_refinement.md) explain the combined result. To reproduce that saved-checkpoint analysis while the local checkpoint store is present:
+The published run resolved the remaining close comparison by matching its baseline precision at completed fresh look 4. This uses saved unweighted flags, all 52 declared interacting baselines, and a separate allowance from two analytically certain free-shell CDF endpoints. The complete [method and confidence accounting](docs/continuous_efficiency_refinement.md) explain the combined result. To reconstruct that analysis, use the pinned historical checkout and its matching local checkpoint store:
 
 ```python
 from pathlib import Path
@@ -78,17 +85,17 @@ The matrix contains 16 primary demographics, four age diagnostics, and 16 same-s
 For an interrupted run:
 
 ```bash
-python -m seti_audit run --protocol results/protocol.lock.json --resume
+python -m seti_audit run --protocol "$SETI_RUN_DIR/protocol.lock.json" --resume
 ```
 
-Valid published orphan batches are recovered by hash. Committed counts and seed identities are never duplicated, reset, or discarded. Logical batches have fixed seed streams; memory-sized propagation can use the same clocks. Resume rejects changed inputs, dependencies, code identity, corrupted aggregates, and simultaneous writers. The local checkpoint store is ignored by git and is required to continue that run. Saved aggregate evidence is sufficient to regenerate its report without raw trajectories or archive downloads.
+Valid published orphan batches are recovered by hash. Committed counts and seed identities are never duplicated, reset, or discarded. Logical batches have fixed seed streams; memory-sized propagation can use the same clocks. Resume rejects changed inputs, dependencies, code identity, corrupted aggregates, and simultaneous writers. State and the matching local checkpoint store are required to continue a run. Missing stores produce restoration errors before simulation; new stores carry paired durable identities. A torn final resource record is preserved and recovered under lock; corruption in completed records is rejected. Saved aggregate evidence is sufficient to regenerate the report without raw trajectories or archive downloads.
 
 Initial sample sizes are planning checkpoints: 100,000 primary survivors, 25,000 per age/ideal setting, 50,000 mixed-speed proposals, and 10,000 shell histories. Required precision extends through cumulative doubling checkpoints. Each unique interval uses `alpha=A/(M*j*(j+1))`, with .025 for primary decisions and .025 for diagnostics; thresholds reuse intervals. There is no maximum look, project duration, byte quota, launch allowance, repair allowance, or reporting-cell quota. Actual RAM/storage constraints trigger smaller physical work units or a resumable interruption.
 
 An explicit further precision look also preserves the frozen experiment:
 
 ```bash
-python -m seti_audit run --protocol results/protocol.lock.json --resume --extend
+python -m seti_audit run --protocol "$SETI_RUN_DIR/protocol.lock.json" --resume --extend
 ```
 
 Reports consume saved evidence in both forms:

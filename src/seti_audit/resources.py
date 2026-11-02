@@ -3,6 +3,7 @@
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import fcntl
+import hashlib
 import json
 import importlib.metadata
 import math
@@ -16,7 +17,7 @@ import subprocess
 import sys
 import uuid
 
-from .artifacts import canonical_bytes
+from .artifacts import canonical_bytes, _reject_constant
 
 
 class ResourceLedger:
@@ -34,9 +35,50 @@ class ResourceLedger:
                 fcntl.flock(lock, fcntl.LOCK_UN)
 
     def records(self) -> list[dict]:
+        with self._locked():
+            return self._records_unlocked()
+
+    def _records_unlocked(self) -> list[dict]:
         if not self.path.exists():
             return []
-        return [json.loads(line) for line in self.path.read_text().splitlines() if line.strip()]
+        content=self.path.read_bytes();lines=content.splitlines(keepends=True)
+        records=[];offset=0;tail=None;complete_tail=False
+        for index,line in enumerate(lines):
+            if not line.strip():
+                offset+=len(line);continue
+            try:
+                record=json.loads(line,parse_constant=_reject_constant)
+                if not isinstance(record,dict) or not isinstance(record.get('job_id'),str) or not isinstance(record.get('event'),str):
+                    raise ValueError('Invalid resource record')
+            except (ValueError,UnicodeDecodeError):
+                if index!=len(lines)-1 or line.endswith(b'\n'):
+                    raise ValueError('Corrupted resource journal in its complete prefix') from None
+                tail=content[offset:];break
+            records.append(record)
+            if index==len(lines)-1 and not line.endswith(b'\n'):
+                tail=content[offset:];complete_tail=True;break
+            offset+=len(line)
+        if tail is not None:
+            digest=hashlib.sha256(tail).hexdigest()
+            evidence=self.path.with_name(self.path.name+'.interrupted.'+digest+'.bin')
+            if evidence.exists():
+                if evidence.read_bytes()!=tail:raise ValueError('Conflicting interrupted resource evidence')
+            else:
+                with evidence.open('xb') as stream:
+                    stream.write(tail);stream.flush();os.fsync(stream.fileno())
+                directory=os.open(evidence.parent,os.O_RDONLY)
+                try:os.fsync(directory)
+                finally:os.close(directory)
+            with self.path.open('r+b') as stream:
+                if complete_tail:
+                    stream.seek(0,os.SEEK_END);stream.write(b'\n')
+                else:stream.truncate(offset)
+                stream.flush();os.fsync(stream.fileno())
+            self._append({'event':'journal_recovery','job_id':'journal-recovery:'+digest,
+                          'details':{'interrupted_bytes':len(tail),'evidence':str(evidence),
+                                     'preserved_complete_record':complete_tail}})
+            return self._records_unlocked()
+        return records
 
     def _append(self, value: dict):
         value = value | {"schema_version": 1, "recorded_utc": datetime.now(timezone.utc).isoformat()}
@@ -48,6 +90,7 @@ class ResourceLedger:
     def start(self, stage: str, ensemble_id: int | None = None, *, details: dict | None = None) -> str:
         job_id = str(uuid.uuid4())
         with self._locked():
+            self._records_unlocked()
             self._append({"event": "start", "job_id": job_id, "stage": stage,
                           "ensemble_id": ensemble_id, "pid": os.getpid(), "details": details or {}})
         return job_id
@@ -59,7 +102,7 @@ class ResourceLedger:
         if any(not isinstance(v, int) or v < 0 for v in (history_evaluations, download_bytes)):
             raise ValueError("Usage counts must be nonnegative integers")
         with self._locked():
-            records = self.records()
+            records = self._records_unlocked()
             if any(r["job_id"] == job_id and r["event"] in {"finish", "import"} for r in records):
                 raise ValueError("Job already finished")
             if not any(r["job_id"] == job_id and r["event"] == "start" for r in records):
@@ -83,7 +126,7 @@ class ResourceLedger:
                 or not isinstance(history_evaluations, int) or history_evaluations < 0):
             raise ValueError("Invalid cumulative progress")
         with self._locked():
-            previous = [r for r in self.records() if r["job_id"] == job_id]
+            previous = [r for r in self._records_unlocked() if r["job_id"] == job_id]
             if not previous or any(r["event"] == "finish" for r in previous):
                 raise ValueError("Job absent or already finished")
             last = previous[-1]
@@ -108,7 +151,7 @@ class ResourceLedger:
             return 0
         imported = 0
         with self._locked():
-            known = {r["job_id"] for r in self.records()}
+            known = {r["job_id"] for r in self._records_unlocked()}
             for line in Path(path).read_text().splitlines():
                 record = json.loads(line)
                 identifier = "bootstrap:" + record["job_id"]

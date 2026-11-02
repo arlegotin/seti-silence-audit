@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 import fcntl
+import gzip
 import hashlib
 import io
 import json
@@ -10,6 +11,7 @@ from pathlib import Path
 import re
 import shutil
 import tempfile
+import uuid
 import zipfile
 
 import numpy as np
@@ -35,6 +37,92 @@ def _fsync_dir(path):
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+
+
+def _missing_store():
+    return FileNotFoundError('Restore the required checkpoint state and raw checkpoint store before resuming; saved aggregates support report regeneration, not replacement sampling.')
+
+
+def _store_identity(output, root, protocol_hash, *, create):
+    outside=output/'checkpoint_store.json';inside=root/'.store.json'
+    if outside.exists():
+        identity=read_json_checked(outside)
+        if not inside.exists():raise _missing_store()
+        if read_json_checked(inside)!=identity:raise ValueError('Checkpoint store identity mismatch')
+    elif inside.exists():
+        identity=read_json_checked(inside)
+        write_json_atomic(outside,identity)
+    elif create:
+        identity={'schema_version':1,'protocol_hash':protocol_hash,'store_id':str(uuid.uuid4())}
+        # Inner identity first: an interrupted initialization can reconstruct
+        # its outer marker, never silently reconstruct a lost data store.
+        write_json_atomic(inside,identity);write_json_atomic(outside,identity)
+    else:
+        return
+    if identity.get('protocol_hash')!=protocol_hash or not identity.get('store_id'):
+        raise ValueError('Checkpoint store protocol/identity mismatch')
+
+
+def verify_checkpoint_references(output_dir, protocol_hash, batches, ledger=None):
+    """Require every externally recorded committed batch before simulation.
+
+    Legacy stores lack the identity pair. Their completed snapshots and job
+    records still bind prior evidence, including compressed published results.
+    """
+    output=Path(output_dir);by_id={b['_batch_id']:b for b in batches}
+    hashes={b['_batch_hash'] for b in batches};required_hashes=set();required_ids={};payloads={}
+    paths={output/name for name in ('confirmation.json','checkpoint_summary.json','result.json','execution_totals.json') if (output/name).exists()}
+    paths.update(output.glob('checkpoint-*.json'));paths.update(output.glob('checkpoint-*.json.gz'))
+    for folder in ('summaries','completed_snapshots'):
+        paths.update((output/folder).glob('*.json'));paths.update((output/folder).glob('*.json.gz'))
+    for path in sorted(paths):
+        if path.suffix=='.gz':
+            value=json.loads(gzip.decompress(path.read_bytes()))
+        else:value=read_json_checked(path)
+        if value.get('protocol_hash') not in (None,protocol_hash):raise ValueError('Saved checkpoint protocol mismatch')
+        if 'content_hash' in value and value['content_hash']!=canonical_hash({k:v for k,v in value.items() if k!='content_hash'}):
+            raise ValueError('Saved checkpoint content hash mismatch')
+        required_hashes.update(value.get('batch_hashes',()))
+        for meta in value.get('batches',()):
+            identifier=meta.get('_batch_id',meta.get('batch_id'))
+            if identifier:
+                digest=meta.get('_batch_hash',meta.get('batch_hash'))
+                if identifier in required_ids and digest and required_ids[identifier] not in (None,digest):
+                    raise ValueError('Conflicting saved batch references')
+                required_ids[identifier]=digest or required_ids.get(identifier)
+        for meta in value.get('all_published_batches',()):
+            identifier=meta['batch_id'];required_ids.setdefault(identifier,None)
+            payloads[identifier]=meta['payload_sha256']
+    if ledger is not None:
+        records=ledger.records()
+        own={r['job_id'] for r in records if r['event']=='start' and r.get('details',{}).get('protocol_hash')==protocol_hash}
+        for record in records:
+            details=record.get('details',{})
+            if record['job_id'] in own and record['event']=='finish' and details.get('batch_id'):
+                required_ids[details['batch_id']]=details['batch_hash']
+    if required_hashes-hashes or set(required_ids)-set(by_id):raise _missing_store()
+    for identifier,digest in required_ids.items():
+        if digest is not None and by_id[identifier]['_batch_hash']!=digest:
+            raise ValueError('Stored batch differs from saved evidence')
+    for identifier,digest in payloads.items():
+        manifest=read_json_checked(output/'checkpoints'/identifier/'manifest.json')
+        if manifest['payload_sha256']!=digest:raise ValueError('Stored payload differs from execution records')
+    grouped={}
+    for batch in batches:
+        if 'batch_index' in batch:
+            key=batch.get('group_id',batch.get('model_id'))
+            grouped.setdefault(key,[]).append(batch['batch_index'])
+    if any(sorted(indices)!=list(range(len(indices))) for indices in grouped.values()):raise _missing_store()
+
+
+def verify_checkpoint_progress(batches, initials, looks, *, group_key):
+    if set(initials)!=set(looks) or any(not isinstance(j,int) or isinstance(j,bool) or j<1 for j in looks.values()):
+        raise ValueError('Checkpoint state groups/indices differ from the frozen experiment')
+    advanced=any(j>1 for j in looks.values())
+    for group,initial in initials.items():
+        count=sum(b['sample_size'] for b in batches if b[group_key]==group)
+        look=looks[group];minimum=initial*2**(look-2) if look>1 else (initial if advanced else 0)
+        if count<minimum or count>initial*2**(look-1):raise _missing_store()
 
 
 def _array_bytes(arrays):
@@ -123,6 +211,7 @@ def commit_batch(output_dir: Path, batch_id: str, payload: dict, arrays: dict) -
     digest = canonical_hash(manifest)
     root = Path(output_dir) / "checkpoints"
     with _locked(root):
+        _store_identity(Path(output_dir),root,payload['protocol_hash'],create=True)
         records = _read_commits(root)
         destination = root / batch_id
         if destination.exists():
@@ -152,7 +241,10 @@ def commit_batch(output_dir: Path, batch_id: str, payload: dict, arrays: dict) -
 
 def load_committed_batches(output_dir: Path, protocol_hash: str) -> tuple[dict, ...]:
     root = Path(output_dir) / "checkpoints"
+    if not root.exists() and any((Path(output_dir)/name).exists() for name in ('run_state.json','state.json','checkpoint_store.json')):
+        raise _missing_store()
     with _locked(root):
+        _store_identity(Path(output_dir),root,protocol_hash,create=False)
         records = _read_commits(root)
         rows = []
         for path in sorted(root.iterdir()):

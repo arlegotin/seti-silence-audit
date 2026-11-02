@@ -77,8 +77,9 @@ is selected from the data.
 
 Two other registered intervals have zero actual noncoverage probability: the
 free-shell joint CDF at (z,u)=(1,1) equals one at each horizon. A B_h point
-guarantees H<=h, and D>T gives (A-D)/(A-T)<1. Their exact-binomial upper endpoint
-is always one. Their share `.025*2/2536` funds the 52 baseline quantities, with
+guarantees H<=h, and D>T gives (A-D)/(A-T)<1. Certified assurance uses the
+analytic point enclosure [1,1]; historical sampling intervals remain diagnostic.
+Their share `.025*2/2536` funds the 52 baseline quantities, with
 `alpha=A_base/[52*j*(j+1)]`. These donors are disjoint from the 12 ideal-S1
 donors. The remaining original diagnostic events, shared-efficiency events,
 and baseline events still total at most .025; the primary pool remains .025.
@@ -92,3 +93,19 @@ They are not used as partial-look confidence evidence. The baseline artifact
 binds its policy and intervals to that complete weights checkpoint; report
 regeneration reads both without simulation. The implementation is
 `seti_audit.baseline_precision.refine_baselines`.
+
+Final review found a floating-point boundary at which an accepted point's
+normalized display exceeded one. The corrected code compares relative times
+before rounding, checks boundary predicates at high precision, and evaluates
+the certain endpoint analytically. All 20,000 original shell histories were
+replayed with their original seeds: every integer count was unchanged. The
+report binds `results/reference_endpoint_review.json` to the original and
+refined locks, weights checkpoint and baseline artifact. It explicitly uses
+analytic point enclosures for all 14 known control quantities in the combined
+confidence guarantee. See [the review record](final_review.md).
+
+Numerical provenance remains pinned to commit
+`d21192c5428a1681fef1179530e8f06c53dde15b`. Reconstruct its sampling using
+that checkout and the matching raw store. The corrected current code supports
+saved-evidence reports and newly frozen experiments; its execution hashes
+intentionally differ from the historical locks.

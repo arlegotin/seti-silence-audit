@@ -226,25 +226,79 @@ def _evaluate_shell(points, h, T=1.):
                 break
         if keep:
             accepted.append(i)
-    arrival = float(min(arrivals[accepted]))
-    first_signal = float(min(signals[accepted]))
-    contact = arrival <= T + h
-    if abs(arrival - T - h) < 1e-12 * max(1., abs(arrival)):
+    accepted_winner = min(accepted, key=lambda i: arrivals[i])
+    first_accepted = min(accepted, key=lambda i: signals[i])
+    first_potential = int(np.argmin(signals))
+    def relative_arrival(i):
+        return math.fsum((float(points[i,3]), float(radii[i]), float(radii[i]*points[i,4]), -T))
+    def relative_signal(i):
+        return math.fsum((float(points[i,3]), float(radii[i]), -T))
+    free_delay, accepted_delay = relative_arrival(winner), relative_arrival(accepted_winner)
+    free_signal = relative_signal(winner)
+    first_signal = relative_signal(first_accepted)
+    first_potential_signal = relative_signal(first_potential)
+    free_warning = float(radii[winner]*points[winner,4]/free_delay) if free_delay>0 else None
+    accepted_warning = (accepted_delay-first_signal)/accepted_delay if accepted_delay>0 else None
+    contact = accepted_delay <= h
+    tied = np.any(np.abs(np.delete(arrivals,winner)-arrivals[winner]) <= 1e-12*max(1.,abs(arrivals[winner])))
+    near = (tied or min(abs(free_delay),abs(free_delay-h),abs(accepted_delay),abs(accepted_delay-h))<1e-12
+            or any(value is not None and min(abs(value),abs(1-value))<1e-12 for value in (free_warning,accepted_warning)))
+    if near:
         with mp.workdps(80):
-            exact = min(mp.mpf(float(points[i, 3])) + mp.sqrt(sum(mp.mpf(float(x))**2 for x in points[i, :3]))
-                        * (1 + mp.mpf(float(points[i, 4]))) for i in accepted)
-            contact = bool(exact <= mp.mpf(T) + mp.mpf(h))
-            arrival = float(exact)
+            precise_signals = [mp.mpf(float(p[3]))+mp.sqrt(sum(mp.mpf(float(x))**2 for x in p[:3])) for p in points]
+            precise_arrivals = [d+mp.sqrt(sum(mp.mpf(float(x))**2 for x in p[:3]))*mp.mpf(float(p[4]))
+                                for p,d in zip(points,precise_signals)]
+            winner = min(range(len(points)),key=lambda i:precise_arrivals[i])
+            a=precise_arrivals[winner];ah=min(precise_arrivals[i] for i in accepted)
+            dh=min(precise_signals[i] for i in accepted)
+            exact_free,exact_accepted=a-mp.mpf(T),ah-mp.mpf(T)
+            # Subtract before rounding an absolute arrival to binary64.
+            free_delay,accepted_delay=float(exact_free),float(exact_accepted)
+            free_signal=float(precise_signals[winner]-mp.mpf(T))
+            first_signal=float(dh-mp.mpf(T));first_potential_signal=float(min(precise_signals)-mp.mpf(T))
+            free_warning=float((a-precise_signals[winner])/exact_free) if exact_free>0 else None
+            accepted_warning=float((ah-dh)/exact_accepted) if exact_accepted>0 else None
+            contact=bool(exact_accepted<=mp.mpf(h))
         rechecks += 1
-    free_delay = float(arrivals[winner] - T)
     return {"accepted_indices": accepted, "suppressed_count": len(points) - len(accepted),
-            "free_arrival_delay": free_delay, "free_source_signal_delay": float(signals[winner] - T),
-            "first_potential_signal_delay": float(min(signals) - T),
-            "first_accepted_signal_delay": first_signal - T,
-            "arrival_delay": arrival - T if contact else None, "right_censored": not contact,
-            "free_warning_fraction": float((arrivals[winner] - signals[winner]) / free_delay) if free_delay > 0 else None,
-            "accepted_warning_fraction": (arrival - first_signal) / (arrival - T) if contact and arrival > T else None,
+            "free_arrival_delay": free_delay, "free_source_signal_delay": free_signal,
+            "first_potential_signal_delay": first_potential_signal,
+            "first_accepted_signal_delay": first_signal,
+            "arrival_delay": accepted_delay if contact else None, "right_censored": not contact,
+            "free_warning_fraction": free_warning,
+            "accepted_warning_fraction": accepted_warning if contact else None,
             "precision_rechecks": rechecks}
+
+
+def _free_joint_flags(points, h, trial):
+    """Compare near-boundary free events before rounded normalization."""
+    grid=(.25,.5,.75,1.)
+    zvalue=trial['free_arrival_delay']/h;uvalue=trial['free_warning_fraction']
+    flags={f'z{z:g}:u{u:g}':bool(zvalue<=z and uvalue<=u) for z in grid for u in grid}
+    recheck=None
+    if any(abs(zvalue-z)<1e-12 or abs(uvalue-z)<1e-12 for z in grid):
+        with mp.workdps(80):
+            radii=[mp.sqrt(sum(mp.mpf(float(x))**2 for x in p[:3])) for p in points]
+            signals=[mp.mpf(float(p[3]))+r for p,r in zip(points,radii)]
+            arrivals=[d+r*mp.mpf(float(p[4])) for p,r,d in zip(points,radii,signals)]
+            winner=min(range(len(points)),key=lambda i:arrivals[i]);delay=arrivals[winner]-1
+            warning=arrivals[winner]-signals[winner]
+            flags={f'z{z:g}:u{u:g}':bool(delay<=mp.mpf(h)*mp.mpf(z) and warning<=mp.mpf(u)*delay)
+                   for z in grid for u in grid}
+            recheck={'free_delay_mp':str(delay),'own_warning_mp':str(warning),'comparisons':dict(flags)}
+    # This target is known analytically from C_h and the guaranteed B_h point.
+    # It is a deterministic control, not a rounded empirical-CDF estimate.
+    flags['z1:u1']=True
+    return flags,recheck
+
+
+def shell_joint_count(summary, z, u):
+    if z==1 and u==1:
+        return summary.trials
+    saved=summary.diagnostics.get('free_joint_counts',{})
+    key=f'z{z:g}:u{u:g}'
+    if key in saved:return int(saved[key])
+    return int(np.sum((summary.free_horizon_fractions<=z)&(summary.free_warning_fractions<=u)))
 
 
 def _restricted_points(rng, count, h, in_B, probability, counter):
@@ -288,6 +342,8 @@ def sample_shell(config: dict, rng, n_histories: int, ledger) -> ShellSummary:
     job, start = ledger.start("G1", details=details), time.perf_counter()
     free_h, free_w, accepted_h, accepted_w = [], [], [], []
     contacts = suppressed = rechecks = 0
+    joint_counts={f'z{z:g}:u{u:g}':0 for z in (.25,.5,.75,1.) for u in (.25,.5,.75,1.)}
+    joint_rechecks=[]
     counter = {"point_proposals": 0, "open_uniform_rejections": 0}
     try:
         for _ in range(n_histories):
@@ -298,6 +354,9 @@ def sample_shell(config: dict, rng, n_histories: int, ledger) -> ShellSummary:
             points = np.concatenate((_restricted_points(rng, nb, h, True, b / s, counter),
                                      _restricted_points(rng, nc, h, False, 1 - b / s, counter)))
             trial = _evaluate_shell(points, h)
+            flags,recheck=_free_joint_flags(points,h,trial)
+            for key,flag in flags.items():joint_counts[key]+=int(flag)
+            if recheck is not None:joint_rechecks.append({'history_index':len(free_h),**recheck})
             free_h.append(trial["free_arrival_delay"] / h)
             free_w.append(trial["free_warning_fraction"])
             suppressed += trial["suppressed_count"]
@@ -316,6 +375,8 @@ def sample_shell(config: dict, rng, n_histories: int, ledger) -> ShellSummary:
     return ShellSummary(n_histories, contacts, n_histories - contacts, b, s,
                         np.array(free_h), np.array(free_w), np.array(accepted_h), np.array(accepted_w),
                         resource_use, {"suppressed_points": suppressed, "precision_rechecks": rechecks,
+                                       "free_joint_counts":joint_counts,"joint_endpoint_method":"analytic_identity",
+                                       "free_joint_precision_rechecks":joint_rechecks,
                                        "phase": config.get("phase", "unspecified"),
                                        "accepted_warning": "first accepted signal to accepted arrival; only within horizon",
                                        "free_warning": "contacting free source's own warning"})
@@ -324,7 +385,7 @@ def sample_shell(config: dict, rng, n_histories: int, ledger) -> ShellSummary:
 def shell_evidence(summary: ShellSummary, h: float) -> dict:
     """Small sufficient aggregates, retaining both free and accepted statistics."""
     joint = [{"z": z, "u": u,
-              "count": int(np.sum((summary.free_horizon_fractions <= z) & (summary.free_warning_fractions <= u))),
+              "count": shell_joint_count(summary,z,u),
               "exact_cdf": free_joint_cdf(h, z, u, 1)}
              for z in (.25, .5, .75, 1.) for u in (.25, .5, .75, 1.)]
     return {"h": h, "alpha": 1, "trials": summary.trials, "contact_count": summary.contact_count,

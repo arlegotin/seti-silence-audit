@@ -43,6 +43,20 @@ def test_saved_report_binds_matched_baselines_to_the_completed_fresh_checkpoint(
     report=render_report(root,root.parent/'report')
     assert 'baseline_table' in report['artifacts']
     assert read_json_checked(root/'family_envelopes.json')['baseline_precision_hash']==result['content_hash']
+    from seti_audit.artifacts import canonical_hash
+    evidence={'status':'passed','original_protocol_hash':frozen_smoke['protocol_hash'],
+              'refinement_protocol_hash':lock['protocol_hash'],'matched_baseline_hash':result['content_hash'],
+              'weights_checkpoint_hash':result['source_refinement_hash'],
+              'all_34_aggregate_integer_counts_unchanged':True,
+              'known_control_enclosures':{key:[0.,0.] for key in lock['error_pool']['donor_ids']}}
+    evidence['known_control_enclosures'].update({key:[1.,1.] for key in result['policy']['error_pool']['donor_ids']})
+    write_json_atomic(root/'reference_endpoint_review.json',evidence)
+    render_report(root,root.parent/'report')
+    assert 'reference_endpoint_review' in read_json_checked(root/'evidence.json')['evidence']
+    assert 'analytic point enclosures' in (root.parent/'report/REPORT.md').read_text()
+    evidence['weights_checkpoint_hash']='wrong';write_json_atomic(root/'reference_endpoint_review.json',evidence)
+    with pytest.raises(ValueError,match='endpoint.*binding|assurance.*binding'):
+        render_report(root,root.parent/'report')
 
 
 def test_report_resolves_zero_response_obstruction_without_fabricating_risk_precision(frozen_smoke):

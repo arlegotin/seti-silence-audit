@@ -171,17 +171,19 @@ def finish_confirmation_checkpoint(upstream, ledger):
     nuisance calculation has resolved the research.
     """
     from .experiments import verify_protocol_lock
-    from .storage import load_committed_batches
+    from .storage import load_committed_batches, verify_checkpoint_references, verify_checkpoint_progress
     from .runner import (_run_lock,_recover_usage,_read_state,_write_state,_objects,
                          _groups,_oracle_rows,_compute_batch,_snapshot,precision_requests)
     verify_protocol_lock(upstream);root=Path(upstream['_output_dir'])
     with _run_lock(root):
         batches=list(load_committed_batches(root,upstream['protocol_hash']))
+        verify_checkpoint_references(root,upstream['protocol_hash'],batches,ledger)
         _recover_usage(ledger,batches,upstream['protocol_hash'])
         groups=_groups(upstream);objects=_objects(upstream);state_path=root/'run_state.json'
         if state_path.exists():looks=_read_state(state_path,upstream['protocol_hash'])['looks']
         else:
             looks={key:1 for key in groups};_write_state(state_path,upstream['protocol_hash'],looks)
+        verify_checkpoint_progress(batches,{key:g['initial'] for key,g in groups.items()},looks,group_key='group_id')
         oracles=_oracle_rows(upstream,objects,ledger)
         for key,group in groups.items():
             target=group['initial']*2**(looks[key]-1)
@@ -374,7 +376,7 @@ def _refinement_intervals(lock, upstream, original, batches, look):
 
 def run_refinement(lock, *, resume=False):
     from .resources import ResourceLedger
-    from .storage import load_committed_batches
+    from .storage import load_committed_batches, verify_checkpoint_references, verify_checkpoint_progress
     from .runner import _run_lock, _recover_usage
     body={k:v for k,v in lock.items() if k!='protocol_hash' and not k.startswith('_')}
     if canonical_hash(body)!=lock['protocol_hash'] or hashlib.sha256(Path(__file__).read_bytes()).hexdigest()!=lock['component_hash']:
@@ -383,6 +385,7 @@ def run_refinement(lock, *, resume=False):
     with _run_lock(root):
         ledger=ResourceLedger(root/'resources.jsonl')
         batches=list(load_committed_batches(root,lock['protocol_hash']))
+        verify_checkpoint_references(root,lock['protocol_hash'],batches,ledger)
         _recover_usage(ledger,batches,lock['protocol_hash'])
         result_path=root/'result.json'
         if result_path.exists():
@@ -401,6 +404,8 @@ def run_refinement(lock, *, resume=False):
             if state.get('protocol_hash')!=lock['protocol_hash'] or state.get('content_hash')!=canonical_hash({k:v for k,v in state.items() if k!='content_hash'}):
                 raise ValueError('Refinement checkpoint state hash mismatch')
             look=state['look']
+        verify_checkpoint_progress(batches,{mid:lock['initial_histories'] for mid in models},
+                                   {mid:look for mid in models},group_key='model_id')
         while True:
             target=lock['initial_histories']*2**(look-1)
             for mid in models:

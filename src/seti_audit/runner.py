@@ -18,7 +18,7 @@ from .inference import (accumulate, accumulate_bounds, alpha_at_checkpoint,
                         certify_narrowing, exact_interval, summarize)
 from .model import _uniform_open, sample_clock_batch, simulate_batch
 from .oracles import independent_oracle
-from .storage import commit_batch, load_committed_batches
+from .storage import commit_batch, load_committed_batches, verify_checkpoint_references, verify_checkpoint_progress
 
 
 @contextmanager
@@ -107,7 +107,7 @@ def _compute_batch(lock, group, index, count, look, objects, ledger):
     prefix_rng, roots["prefix"] = _rng(kind, mid, purpose, index, phase)
     try:
         if kind == "shell":
-            from .theorem import sample_shell, shell_evidence
+            from .theorem import sample_shell, shell_evidence, shell_joint_count
             h = (.02, .5)[mid]
             sample = sample_shell({"alpha": 1, "h": h, "phase": "confirmation", "protocol_hash": lock["protocol_hash"]},
                                   prefix_rng, count, ledger)
@@ -117,7 +117,7 @@ def _compute_batch(lock, group, index, count, look, objects, ledger):
             counts[f"shell:{mid}:contact"] = AuditCounts(count, sample.contact_count, 0, 0, 0., 0., {})
             for z in (.25, .5, .75, 1.):
                 for u in (.25, .5, .75, 1.):
-                    successes = int(np.sum((sample.free_horizon_fractions <= z) & (sample.free_warning_fractions <= u)))
+                    successes = shell_joint_count(sample,z,u)
                     counts[f"shell:{mid}:z{z:g}:u{u:g}"] = AuditCounts(count, successes, 0, 0, 0., 0., {})
             extra["shell_summary"] = shell_evidence(sample, h)
             extra["nested_history_evaluations"] = sample.trials
@@ -469,6 +469,7 @@ def run_confirmation(protocol_lock, resume, ledger):
     lock = lock | {"_output_dir": str(root.resolve())}
     with _run_lock(root):
         batches = list(load_committed_batches(root, lock["protocol_hash"]))
+        verify_checkpoint_references(root,lock['protocol_hash'],batches,ledger)
         if batches and not resume:
             raise ValueError("Existing confirmation: use --resume; counts cannot be reset")
         _recover_usage(ledger, batches, lock["protocol_hash"])
@@ -488,6 +489,7 @@ def run_confirmation(protocol_lock, resume, ledger):
         else:
             looks = {key: max((b["checkpoint_index"] for b in batches if b["group_id"] == key), default=1) for key in groups}
             _write_state(state_path, lock["protocol_hash"], looks)
+        verify_checkpoint_progress(batches,{key:g['initial'] for key,g in groups.items()},looks,group_key='group_id')
         oracle_rows = _oracle_rows(lock, objects, ledger)
         while True:
             progress = {key: sum(b["sample_size"] for b in batches if b["group_id"] == key) for key in groups}
