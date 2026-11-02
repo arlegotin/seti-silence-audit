@@ -218,6 +218,18 @@ class FutureMarks:
         object.__setattr__(self, "speed_gaps", checked.speed_gaps)
 
 
+@dataclass(frozen=True)
+class WeightBounds:
+    low: float
+    high: float
+    rechecks: tuple[dict, ...] = field(default=(), compare=False, repr=False)
+
+    def __post_init__(self):
+        if not (math.isfinite(self.low) and math.isfinite(self.high)
+                and 0 <= self.low <= self.high <= 1):
+            raise ValueError(f"Invalid probability bounds: [{self.low},{self.high}]")
+
+
 def load_protocol(path: Path) -> Protocol:
     raw = read_json_checked(path)
     if raw.get("schema_version") != 1:
