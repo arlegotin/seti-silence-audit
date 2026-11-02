@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 import math
+from numbers import Integral
 from pathlib import Path
 
 import numpy as np
@@ -255,6 +256,55 @@ class ShellSummary:
     accepted_warning_fractions: FloatArray
     resource_use: dict
     diagnostics: dict
+
+
+@dataclass(frozen=True)
+class AuditCounts:
+    histories: int
+    arrivals: int
+    nulls: int
+    arrival_nulls: int
+    sum_w: float
+    sum_bw: float
+    bound_counts: dict[str, int]
+    bound_sums: dict[str, float] = field(default_factory=dict)
+
+    def __post_init__(self):
+        values = (self.histories, self.arrivals, self.nulls, self.arrival_nulls)
+        if (any(not isinstance(x, Integral) or isinstance(x, bool) or x < 0 for x in values)
+                or self.arrivals > self.histories or self.nulls > self.histories
+                or self.arrival_nulls > min(self.arrivals, self.nulls)
+                or self.nulls - self.arrival_nulls > self.histories - self.arrivals
+                or not math.isfinite(self.sum_w) or not math.isfinite(self.sum_bw)
+                or not 0 <= self.sum_bw <= self.sum_w <= self.histories):
+            raise ValueError("Inconsistent audit counts/sums")
+        if self.bound_counts:
+            keys = {"null_low", "null_high", "J_low", "J_high", "K_low", "K_high"}
+            if (set(self.bound_counts) != keys or set(self.bound_sums) != keys
+                    or any(not isinstance(x, Integral) or isinstance(x, bool) or not 0 <= x <= self.histories
+                           for x in self.bound_counts.values())
+                    or any(not math.isfinite(x) or not 0 <= x <= self.histories for x in self.bound_sums.values())):
+                raise ValueError("Invalid interval-weight audit components")
+            for suffix in ("low", "high"):
+                if self.bound_counts[f"J_{suffix}"] + self.bound_counts[f"K_{suffix}"] != self.bound_counts[f"null_{suffix}"]:
+                    raise ValueError("Audit components do not partition nulls")
+                if (self.bound_counts[f"J_{suffix}"] > self.arrivals
+                        or self.bound_counts[f"K_{suffix}"] > self.histories - self.arrivals
+                        or self.bound_sums[f"J_{suffix}"] > self.arrivals
+                        or self.bound_sums[f"K_{suffix}"] > self.histories - self.arrivals):
+                    raise ValueError("Audit component exceeds its arrival partition")
+            if any(self.bound_counts[f"{q}_low"] > self.bound_counts[f"{q}_high"] for q in ("null", "J", "K")):
+                raise ValueError("Non-nested audit bounds")
+
+
+@dataclass(frozen=True)
+class Summary:
+    rows: tuple[dict, ...]
+    certified: dict
+    possible: dict
+    envelopes: dict
+    certificates: dict
+    interval_evidence: dict
 
 
 def load_protocol(path: Path) -> Protocol:
