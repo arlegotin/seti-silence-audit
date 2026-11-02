@@ -78,6 +78,80 @@ class Protocol:
     source_hashes: dict[str, str]
 
 
+@dataclass(frozen=True)
+class Geometry:
+    site_ids: tuple[str, ...]
+    xyz_ly: FloatArray
+    radii_ly: FloatArray
+    distances_ly: FloatArray
+
+    def __post_init__(self):
+        n = len(self.site_ids)
+        if len(set(self.site_ids)) != n:
+            raise ValueError("Duplicate physical site IDs")
+        for name, shape in [("xyz_ly", (n, 3)), ("radii_ly", (n,)), ("distances_ly", (n, n))]:
+            value = np.array(getattr(self, name), dtype=np.float64, copy=True)
+            if value.shape != shape or not np.all(np.isfinite(value)):
+                raise ValueError(f"Invalid geometry {name}")
+            value.setflags(write=False)
+            object.__setattr__(self, name, value)
+        if np.any(self.radii_ly < 0) or np.any(self.distances_ly < 0):
+            raise ValueError("Negative geometry distance")
+
+
+@dataclass(frozen=True)
+class Catalog:
+    source_rows: tuple[dict, ...]
+    geometry: Geometry
+    provenance: dict
+
+
+@dataclass(frozen=True)
+class Scan:
+    visit_id: str
+    site_id: str
+    scan_index: int
+    start_year: float
+    duration_year: float
+    paired_visit_id: str
+    source_row: str | None = None
+    session_date: str | None = None
+    start_mjd: float | None = None
+    source_file: str | None = None
+
+
+@dataclass(frozen=True)
+class BoundedVisit:
+    visit_id: str
+    site_id: str
+    allowed_intervals: tuple[tuple[float, float], ...]
+    duration_year: float
+    source_row: str | None = None
+    year_group: str | None = None
+
+
+@dataclass(frozen=True)
+class Schedule:
+    exact_scans: tuple[Scan, ...]
+    bounded_visits: tuple[BoundedVisit, ...]
+    schedule_grade: str
+    detector_grade: str
+    endpoint: dict
+    provenance: dict
+
+    def __post_init__(self):
+        if self.schedule_grade not in {"exact", "coarsened_F1", "unavailable"}:
+            raise ValueError("Unknown schedule grade")
+        if self.detector_grade not in {"assumed_F2", "unconstrained_F2", "calibrated"}:
+            raise ValueError("Unknown detector grade")
+        if self.exact_scans and self.bounded_visits:
+            raise ValueError("Schedule mixes exact and interval representations")
+        if self.schedule_grade == "exact" and self.bounded_visits:
+            raise ValueError("Interval visits cannot be graded exact")
+        if self.schedule_grade == "coarsened_F1" and self.exact_scans:
+            raise ValueError("Coarsened schedule cannot contain imputed exact scans")
+
+
 def load_protocol(path: Path) -> Protocol:
     raw = read_json_checked(path)
     if raw.get("schema_version") != 1:
