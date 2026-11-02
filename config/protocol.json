@@ -1,0 +1,281 @@
+{
+  "schema_version": 1,
+  "horizon_years": 100,
+  "models": [
+    {
+      "model_id": 0,
+      "mu": 0.1,
+      "age_years": 10000,
+      "speed_id": "S1",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 1,
+      "mu": 0.1,
+      "age_years": 10000,
+      "speed_id": "S2",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 2,
+      "mu": 0.1,
+      "age_years": 10000,
+      "speed_id": "S3",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 3,
+      "mu": 0.1,
+      "age_years": 10000,
+      "speed_id": "S4",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 4,
+      "mu": 1,
+      "age_years": 10000,
+      "speed_id": "S1",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 5,
+      "mu": 1,
+      "age_years": 10000,
+      "speed_id": "S2",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 6,
+      "mu": 1,
+      "age_years": 10000,
+      "speed_id": "S3",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 7,
+      "mu": 1,
+      "age_years": 10000,
+      "speed_id": "S4",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 8,
+      "mu": 3,
+      "age_years": 10000,
+      "speed_id": "S1",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 9,
+      "mu": 3,
+      "age_years": 10000,
+      "speed_id": "S2",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 10,
+      "mu": 3,
+      "age_years": 10000,
+      "speed_id": "S3",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 11,
+      "mu": 3,
+      "age_years": 10000,
+      "speed_id": "S4",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 12,
+      "mu": 12,
+      "age_years": 10000,
+      "speed_id": "S1",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 13,
+      "mu": 12,
+      "age_years": 10000,
+      "speed_id": "S2",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 14,
+      "mu": 12,
+      "age_years": 10000,
+      "speed_id": "S3",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 15,
+      "mu": 12,
+      "age_years": 10000,
+      "speed_id": "S4",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 16,
+      "mu": 3,
+      "age_years": 1000,
+      "speed_id": "S1",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 17,
+      "mu": 3,
+      "age_years": 1000,
+      "speed_id": "S4",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 18,
+      "mu": 3,
+      "age_years": 100000,
+      "speed_id": "S1",
+      "future_multiplier": 1
+    },
+    {
+      "model_id": 19,
+      "mu": 3,
+      "age_years": 100000,
+      "speed_id": "S4",
+      "future_multiplier": 1
+    }
+  ],
+  "emissions": [
+    {
+      "emission_id": "E0",
+      "zeta": 0,
+      "delay_years": 0,
+      "lifetime_years": null,
+      "activity": "always",
+      "on_fraction": 0.1,
+      "corr_days": 1
+    },
+    {
+      "emission_id": "E1",
+      "zeta": 1,
+      "delay_years": 0,
+      "lifetime_years": null,
+      "activity": "always",
+      "on_fraction": 0.1,
+      "corr_days": 1
+    },
+    {
+      "emission_id": "E2",
+      "zeta": 0.1,
+      "delay_years": 0,
+      "lifetime_years": null,
+      "activity": "always",
+      "on_fraction": 0.1,
+      "corr_days": 1
+    },
+    {
+      "emission_id": "E3",
+      "zeta": 1,
+      "delay_years": 100,
+      "lifetime_years": null,
+      "activity": "always",
+      "on_fraction": 0.1,
+      "corr_days": 1
+    },
+    {
+      "emission_id": "E4",
+      "zeta": 1,
+      "delay_years": 0,
+      "lifetime_years": 100,
+      "activity": "always",
+      "on_fraction": 0.1,
+      "corr_days": 1
+    },
+    {
+      "emission_id": "E5",
+      "zeta": 1,
+      "delay_years": 0,
+      "lifetime_years": null,
+      "activity": "ctmc",
+      "on_fraction": 0.1,
+      "corr_days": 1
+    }
+  ],
+  "detectors": [
+    {
+      "detector_id": "Dnom",
+      "pair_low": 0.8836,
+      "pair_high": 0.8836,
+      "allow_partial": false
+    },
+    {
+      "detector_id": "Dweak",
+      "pair_low": 0.44,
+      "pair_high": 0.44,
+      "allow_partial": false
+    },
+    {
+      "detector_id": "Dhigh",
+      "pair_low": 0.94,
+      "pair_high": 0.94,
+      "allow_partial": false
+    },
+    {
+      "detector_id": "Dpositive",
+      "pair_low": 0.44,
+      "pair_high": 0.94,
+      "allow_partial": false
+    },
+    {
+      "detector_id": "Duncal",
+      "pair_low": 0,
+      "pair_high": 1,
+      "allow_partial": true
+    }
+  ],
+  "thresholds": [
+    0.01,
+    0.05,
+    0.1
+  ],
+  "future_multipliers": [
+    0,
+    1,
+    10
+  ],
+  "initial_checkpoints": {
+    "primary_survivors": 100000,
+    "age_survivors": 25000,
+    "ideal_survivors": 25000,
+    "survival_proposals": 50000,
+    "shell_histories": 10000
+  },
+  "extension_policy": {
+    "multiplier": 2,
+    "alpha_rule": "A/(M*j*(j+1))"
+  },
+  "seed_roots": {
+    "development": [
+      20261101,
+      0
+    ],
+    "confirmation": [
+      20261101,
+      1
+    ]
+  },
+  "error_pools": {
+    "primary": 0.025,
+    "diagnostics": 0.025
+  },
+  "tolerances": {
+    "quadrature_absolute": 1e-08,
+    "quadrature_relative": 1e-06,
+    "validated_probability_error": 0.0001,
+    "formula_relative": 1e-09,
+    "absolute_narrowing": 0.01,
+    "relative_narrowing": 0.25
+  },
+  "source_hashes": {
+    "docs/blueprint.md": "b1b7db71cb41c69f6f508a3010b11ae5fc1168adcc8ae9bbb646008d1daaa211",
+    "docs/silence_contact_theorem.pdf": "2a6c071a3edfc6ff3dc5db07ac4c94448537f907e9e22051f9397b49374839fe"
+  }
+}
