@@ -1,6 +1,7 @@
 """Command entry points for reproducible, locally logged research."""
 
 import argparse
+import json
 from pathlib import Path
 import resource
 import shutil
@@ -8,7 +9,9 @@ import subprocess
 import sys
 import time
 
-from .resources import ResourceLedger
+from .resources import ResourceLedger, inspect_environment
+from .artifacts import write_json_atomic
+from .contracts import load_protocol
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -18,7 +21,32 @@ def main(argv: list[str] | None = None) -> int:
     logged.add_argument("--stage", required=True)
     logged.add_argument("--ledger", type=Path, default=Path("results/resources.jsonl"))
     logged.add_argument("args", nargs=argparse.REMAINDER)
+    environment = subcommands.add_parser("env", help="Record actual hardware and scientific environment")
+    environment.add_argument("--out", type=Path, default=Path("results/environment.json"))
+    for name in ("acquire", "validate-data"):
+        command = subcommands.add_parser(name)
+        command.add_argument("--config", type=Path, default=Path("config/protocol.json"))
     options = parser.parse_args(argv)
+    if options.command == "env":
+        result = inspect_environment()
+        write_json_atomic(options.out, result)
+        print(json.dumps({key: result[key] for key in
+                          ["architecture", "physical_memory_bytes", "disk_free_bytes", "packages"]}, indent=2))
+        return 0
+    if options.command in {"acquire", "validate-data"}:
+        from .data import acquire_sources, load_catalog, load_schedule, validate_schedule
+        protocol = load_protocol(options.config)
+        catalog = load_catalog(Path("docs/blueprint.md"), Path("data"))
+        if options.command == "acquire":
+            result = acquire_sources(protocol, catalog, ResourceLedger(Path("results/resources.jsonl")))
+            print(json.dumps({key: result[key] for key in
+                              ["catalog_status", "schedule_grade", "detector_grade", "downloaded_bytes_this_job"]}, indent=2))
+        else:
+            schedule = load_schedule(catalog, Path("inputs"), Path("data"))
+            result = validate_schedule(schedule, catalog, schedule.provenance | {"kind": "observing_log"})
+            write_json_atomic(Path("data/schedule_validation.json"), result)
+            print(json.dumps(result, indent=2))
+        return 0
     if options.command == "run-logged":
         command = options.args[1:] if options.args[:1] == ["--"] else options.args
         if not command:

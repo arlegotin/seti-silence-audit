@@ -1,0 +1,2 @@
+# Source snapshots retain their exact downloaded bytes and integrity hashes.
+inputs/*.html -whitespace

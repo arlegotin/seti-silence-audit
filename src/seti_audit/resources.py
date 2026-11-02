@@ -4,9 +4,14 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import fcntl
 import json
+import importlib.metadata
 import math
 import os
 from pathlib import Path
+import platform
+import shutil
+import subprocess
+import sys
 import uuid
 
 from .artifacts import canonical_bytes
@@ -88,3 +93,45 @@ class ResourceLedger:
                     known.add(identifier)
                     imported += 1
         return imported
+
+
+def physical_batch_size(desired: int, *, bytes_per_history: int, available_bytes: int) -> int:
+    if desired <= 0 or bytes_per_history <= 0 or available_bytes < 0:
+        raise ValueError("Invalid batch capacity input")
+    count = min(desired, available_bytes // bytes_per_history)
+    if count < 1:
+        raise MemoryError("Available memory cannot hold one history batch element")
+    return count
+
+
+def inspect_environment() -> dict:
+    import numpy
+    import scipy
+
+    errors = {}
+
+    def probe(name, args):
+        result = subprocess.run(args, capture_output=True, text=True, check=False)
+        if result.returncode:
+            errors[name] = result.stderr.strip()
+            return None
+        return result.stdout.strip()
+
+    memory = probe("physical_memory", ["sysctl", "-n", "hw.memsize"]) if sys.platform == "darwin" else None
+    cpu = probe("cpu_available", ["sysctl", "-n", "hw.logicalcpu"]) if sys.platform == "darwin" else os.cpu_count()
+    power = probe("power", ["pmset", "-g", "custom"]) if sys.platform == "darwin" else "not macOS"
+    builds = {}
+    for name, module in [("numpy_build", numpy), ("scipy_build", scipy)]:
+        builds[name] = module.show_config(mode="dicts")
+    return {"schema_version": 1, "recorded_utc": datetime.now(timezone.utc).isoformat(),
+            "architecture": platform.machine(), "python_version": platform.python_version(),
+            "python_executable": sys.executable, "platform": platform.platform(),
+            "physical_memory_bytes": int(memory) if memory else None,
+            "cpu_available": int(cpu) if cpu else None,
+            "disk_free_bytes": shutil.disk_usage(Path.cwd()).free,
+            "packages": {name: importlib.metadata.version(name)
+                         for name in ["numpy", "scipy", "matplotlib", "pytest", "mpmath"]},
+            "power_settings": power, "probe_errors": errors,
+            "thread_environment": {key: os.environ.get(key) for key in
+                                   ["OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"]},
+            "precision": "CPU binary64", **builds}

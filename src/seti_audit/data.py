@@ -48,6 +48,8 @@ def _write_csv(path: Path, fields: list[str], rows):
 
 
 def load_catalog(blueprint_path: Path, output_dir: Path) -> Catalog:
+    old_path = Path(output_dir) / "provenance.json"
+    old_provenance = read_json_checked(old_path) if old_path.exists() else {}
     content = Path(blueprint_path).read_bytes()
     block = re.search(r"```csv\n(source_row,year_group,TOI,distance_pc,RA_hms,Dec_dms\n.*?)\n```",
                       content.decode("utf-8"), re.S)
@@ -94,7 +96,15 @@ def load_catalog(blueprint_path: Path, output_dir: Path) -> Catalog:
     provenance["artifact_hashes"] = {name: hashlib.sha256((output_dir / name).read_bytes()).hexdigest()
                                       for name in ("source_rows.csv", "targets.csv", "geometry.npz")}
     write_json_atomic(output_dir / "provenance.json", provenance)
-    return Catalog(rows, geometry, provenance)
+    catalog = Catalog(rows, geometry, provenance)
+    verification = old_provenance.get("source_verification", {})
+    verified_path = Path(verification.get("source_path", ""))
+    if (old_provenance.get("blueprint_sha256") == provenance["blueprint_sha256"]
+            and verified_path.is_file()
+            and hashlib.sha256(verified_path.read_bytes()).hexdigest() == verification.get("sha256")):
+        from .acquisition import verify_catalog_source
+        catalog = verify_catalog_source(catalog, verified_path, output_dir)
+    return catalog
 
 
 def _utc(date: str) -> datetime:
@@ -223,3 +233,6 @@ def validate_schedule(schedule: Schedule, catalog: Catalog, completeness: dict) 
     return {"schema_version": 1, "schedule_grade": "exact", "exact_complete": True,
             "visits": len(groups), "scans": len(schedule.exact_scans), "sessions": sorted(sessions),
             "source_evidence": completeness, "timestamp_roundoff_tolerance_days": 2e-11}
+
+
+from .acquisition import acquire_sources, stream_scan_metadata  # Public input boundary.
