@@ -275,6 +275,8 @@ Tests use tiny offline fixtures, not archive downloads or full confirmation. Run
 
 ## Task 14: Complete the required research and evidence report
 
+Execution-method amendment, 2 November 2026: the first completed scientific checkpoint exposed a loose Dpositive outer enclosure, which cannot establish an attainable continuous-parameter risk. Complete the current original checkpoint and replace that remaining numerical precision work with the independently validated [continuous-efficiency refinement](../../continuous_efficiency_refinement.md). Preserve the original matrix, assumptions, materiality rules, seeds/batches, and all original error evidence; use fresh stage-8 confirmation and the documented analytically zero-error donor allocation. This is a computational remedy under Step 1, not an empirical-information-limit claim or a scientific-grid change. No duration or workload cap is introduced.
+
 **Files/artifacts:** Produce the frozen protocol/matrix/interval registry, immutable manifests/checkpoints/aggregates, resource/failure/deviation records, evidence tables, `conclusions.json`, `report/REPORT.md`, figures, and final `README.md`. Preserve the Task 2–3 inputs and provenance. Stream/compress artifacts to fit actual available storage; retain aggregate evidence and replay samples instead of every trajectory.
 
 **Interfaces:** Consume Task 12 frozen runner and Task 13 report renderer. This is execution of the research, not another software feature; reuse the validated tests instead of writing implementation-mirroring tests.

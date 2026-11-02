@@ -283,11 +283,41 @@ def render_report(results_dir: Path, output_dir: Path, *, protocol_path: Path | 
         theorem = read_json_checked(root / "theorem/deterministic.json") if (root / "theorem/deterministic.json").exists() else {}
         summary, valid, raw = _report_view(lock, result, oracle_rows)
         rows = _rows(lock, result, summary, valid, raw, oracle_rows)
+        refinement = None
+        refinement_path = root / 'refinement/result.json'
+        if refinement_path.exists():
+            from .refinement import refined_summary, _donor_allocation, refinement_alpha
+            refinement_lock = read_json_checked(root / 'refinement/protocol.lock.json')
+            body = {k:v for k,v in refinement_lock.items() if k!='protocol_hash' and not k.startswith('_')}
+            refinement = read_json_checked(refinement_path)
+            if (canonical_hash(body)!=refinement_lock['protocol_hash']
+                or refinement['protocol_hash']!=refinement_lock['protocol_hash']
+                or refinement['upstream_protocol_hash']!=lock['protocol_hash']
+                or refinement['upstream_result_hash']!=result['content_hash']
+                or refinement_lock['upstream_result_hash']!=result['content_hash']
+                or refinement['content_hash']!=canonical_hash({k:v for k,v in refinement.items() if k!='content_hash'})
+                or refinement_lock['error_pool']!=_donor_allocation(lock)):
+                raise ValueError('Saved refinement/upstream evidence binding mismatch')
+            pool=refinement_lock['error_pool']
+            for interval in refinement['interval_evidence'].values():
+                expected=refinement_alpha(pool['A'],pool['M'],interval['parent_look'],interval['subdomains'])
+                if interval['alpha']!=expected or interval['parent_interval_id'] not in pool['parent_ids']:
+                    raise ValueError('Saved refinement confidence allocation mismatch')
+            summary=refined_summary(lock,list(valid.values()),refinement['subdomains'])
+            _csv(root/'tables/refined_subdomains.csv',('parent_cell_id','p_interval','intervals'),refinement['subdomains'])
         extra = read_json_checked(root / "claims.json").get("claims", []) if (root / "claims.json").exists() else []
         claims = _claims(lock, result, summary, rows, theorem, extra)
+        if refinement:
+            parent_ids={s['parent_cell_id'] for s in refinement['subdomains']}
+            affected={f for c in lock['cells'] if c['cell_id'] in parent_ids for f in c['families']}
+            for claim in claims:
+                if claim['claim_id'].removeprefix('family:') in affected:
+                    claim['scope']+='; continuous shared-efficiency subdomains with fresh confirmation'
+                    claim['evidence_ids']+=['refinement_protocol','refinement_result']
         inputs = {"protocol": protocol_file, "confirmation": root / "confirmation.json",
                   "matrix": root / "matrix.json", "interval_registry": root / "bound_registry.json"}
         for name, path in (("theorem", root / "theorem/deterministic.json"), ("independent_oracles", root / "independent_oracles.json"),
+                           ('refinement_protocol',root/'refinement/protocol.lock.json'),('refinement_result',refinement_path),
                            ("custom_claims", root / "claims.json"), ("environment", root / "environment.json"),
                            ("pilot", root / "pilot.json"), ("calibration", root / "calibration.json"),
                            ("analytic_controls", root / "analytic_controls.json"), ("correctness", root / "correctness.json")):
@@ -300,7 +330,8 @@ def render_report(results_dir: Path, output_dir: Path, *, protocol_path: Path | 
         write_json_atomic(root / "evidence.json", {"evidence": evidence})
         write_json_atomic(root / "model_rows.json", {"protocol_hash": lock["protocol_hash"], "rows": rows})
         write_json_atomic(root / "family_envelopes.json", {"protocol_hash": lock["protocol_hash"], "envelopes": summary.envelopes,
-                                                          "certified": summary.certified, "possible": summary.possible, "certificates": summary.certificates})
+                                                          "certified": summary.certified, "possible": summary.possible, "certificates": summary.certificates,
+                                                          'refinement_hash':refinement['content_hash'] if refinement else None})
         write_json_atomic(root / "conclusions.json", {"protocol_hash": lock["protocol_hash"], "purpose": lock["purpose"], "claims": claims})
         _csv(root / "tables/model_rows.csv", ROW_FIELDS, rows)
         _csv(root / "tables/demographics.csv", ("model_id", "mu", "age_years", "speed_id", "future_multiplier"), lock.get("config", {}).get("models", []))
@@ -356,6 +387,8 @@ def render_report(results_dir: Path, output_dir: Path, *, protocol_path: Path | 
                  "Runtime estimates and sample checkpoints impose no deadline, launch allowance, byte quota, or maximum precision look. Actual capacity interruptions preserve resumable work. An interruption is not a scientific outcome.", "",
                  f"Unperformed or invalid required result rows: `{json.dumps([r['cell_id'] for r in rows if r['completion_status'] == 'pending'])}`.", "",
                  "## Artifacts", ""]
+        if refinement:
+            lines.extend(['The continuous shared-efficiency refinement covers every p in [.44,.94] with contiguous subdomains; it assumes no monotonicity of conditional risk. Family envelopes use these tighter bounds where supplied. The original per-model table retains its coarse bounds; [refined subdomains]('+link(root/'tables/refined_subdomains.csv')+') provide the replacement evidence. Fresh stage-8 confirmation streams are independent of the original histories. Its error allowance comes only from analytically zero-error ideal-S1 intervals, preserving the original total error pool; no unused data-dependent checkpoint allowance is reclaimed.',''])
         for name, slot in figures.items():
             if slot["status"] == "generated":
                 lines.extend([f"![{name.replace('_', ' ')}]({link(Path(slot['path']))})", ""])
@@ -369,6 +402,7 @@ def render_report(results_dir: Path, output_dir: Path, *, protocol_path: Path | 
                    "model_table": root / "tables/model_rows.csv", "family_table": root / "tables/family_envelopes.csv",
                    "comparisons": root / "tables/comparisons.csv", "theorem_table": root / "tables/theorem_ratios.csv"}
         outputs.update(demographics=root / "tables/demographics.csv", reference_checks=root / "tables/reference_checks.csv")
+        if refinement:outputs['refinement_table']=root/'tables/refined_subdomains.csv'
         outputs.update({"figure_" + name: path for name, path in figure_paths.items()})
         manifest = {"protocol_hash": lock["protocol_hash"], "figures": figures,
                     "artifacts": {name: {"path": str(path.resolve()), "sha256": _sha(path)} for name, path in outputs.items()}}

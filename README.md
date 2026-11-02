@@ -42,6 +42,18 @@ python -m seti_audit report --protocol results/protocol.lock.json --from-results
 
 `calibrate` measures actual clocks, propagation, selection, quadrature, replays, imports, memory, and serialization. Runtime projections guide execution; they never shrink the scientific matrix. `pilot` checks the prescribed development cases and exact positive/null/sign controls. `freeze` requires current complete correctness, calibration, and pilot evidence and binds the inputs, scientific grid, numerical policy, registry, dependencies, code, and seeds.
 
+For the continuous detector-efficiency comparison, the [refined numerical method](docs/continuous_efficiency_refinement.md) avoids the loose history-by-history full-range bound. Finish the current prescribed original checkpoint, verify and freeze the additional method, then run its independent confirmation:
+
+```bash
+python -m seti_audit.refinement checkpoint --protocol results/protocol.lock.json
+python -m seti_audit check --out results/refinement/correctness.json
+python -m seti_audit.refinement freeze --protocol results/protocol.lock.json --out results/refinement
+python -m seti_audit.refinement run --protocol results/refinement/protocol.lock.json
+python -m seti_audit report --protocol results/protocol.lock.json --from-results
+```
+
+Use `--resume` on the refinement `run` command after interruption. Its confidence allowance comes from analytically zero-error ideal-S1 interval allocations, preserving the original total error allowance. It covers the full shared-efficiency interval, preserves original evidence, uses fresh stage-8 streams, and doubles precision as needed. The report keeps the original per-model rows and separately exports refined subdomains and the resulting family envelopes. An original checkpoint labeled `checkpoint_complete_refinement_pending` still requires this additional work.
+
 The matrix contains 16 primary demographics, four age diagnostics, and 16 same-star ideal settings with paired continuation replays. Future k=0/10 controls cover E1/E0; age diagnostics use E1 and the three point detectors. It is a one-factor robustness design. The source theorem, finite independent-site model, interacting model, and perfect-silence comparator retain their different conditioning and interpretation.
 
 For an interrupted run:
