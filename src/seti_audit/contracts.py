@@ -230,6 +230,18 @@ class WeightBounds:
             raise ValueError(f"Invalid probability bounds: [{self.low},{self.high}]")
 
 
+@dataclass(frozen=True)
+class OracleResult:
+    C: float
+    likelihood: WeightBounds
+    R0: WeightBounds
+    R: WeightBounds
+    absolute_errors: dict
+    joint_bounds: dict
+    validation: dict = field(default_factory=dict)
+    status: str = "validated"
+
+
 def load_protocol(path: Path) -> Protocol:
     raw = read_json_checked(path)
     if raw.get("schema_version") != 1:
