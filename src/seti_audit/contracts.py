@@ -1,6 +1,6 @@
 """Scientific configuration contracts shared across validated components."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 from pathlib import Path
 
@@ -150,6 +150,52 @@ class Schedule:
             raise ValueError("Interval visits cannot be graded exact")
         if self.schedule_grade == "coarsened_F1" and self.exact_scans:
             raise ValueError("Coarsened schedule cannot contain imputed exact scans")
+
+
+@dataclass(frozen=True)
+class FirstClocks:
+    birth_years: FloatArray
+    speeds: FloatArray
+    speed_gaps: FloatArray
+    diagnostics: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        shape = np.asarray(self.birth_years).shape
+        if len(shape) != 1:
+            raise ValueError("First clocks must be site-indexed vectors")
+        for name in ("birth_years", "speeds", "speed_gaps"):
+            value = np.array(getattr(self, name), dtype=np.float64, copy=True)
+            if value.shape != shape:
+                raise ValueError("First-clock array shapes disagree")
+            value.setflags(write=False)
+            object.__setattr__(self, name, value)
+        if np.any(np.isnan(self.birth_years) | np.isneginf(self.birth_years)):
+            raise ValueError("Birth clocks allow only finite values or positive infinity")
+        if (np.any(~np.isfinite(self.speeds)) or np.any((self.speeds <= 0) | (self.speeds >= 1))
+                or np.any(~np.isfinite(self.speed_gaps)) or np.any(self.speed_gaps <= 0)):
+            raise ValueError("Speed marks must be strictly subluminal with positive finite q")
+        if not np.allclose(self.speeds, 1 / (1 + self.speed_gaps), rtol=4 * np.finfo(float).eps, atol=0):
+            raise ValueError("Inconsistent speed and speed-gap marks")
+
+
+@dataclass(frozen=True)
+class History:
+    accepted_indices: IntArray
+    birth_years: FloatArray
+    speeds: FloatArray
+    speed_gaps: FloatArray
+    occupation_years: FloatArray
+    arrival_year: float
+    right_censored: bool
+    diagnostics: dict
+
+    @property
+    def survives(self) -> bool:
+        return bool(self.diagnostics.get("survives", self.arrival_year > 0))
+
+    @property
+    def arrives_within_horizon(self) -> bool:
+        return bool(self.diagnostics.get("arrives_within_horizon", 0 < self.arrival_year <= 100))
 
 
 def load_protocol(path: Path) -> Protocol:
