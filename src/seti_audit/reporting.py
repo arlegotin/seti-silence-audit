@@ -29,7 +29,7 @@ def _sha(path):
 
 def _csv(path, fields, rows):
     stream = io.StringIO(newline="")
-    writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore")
+    writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
     writer.writeheader()
     for row in rows:
         writer.writerow({key: json.dumps(value, sort_keys=True, allow_nan=False, separators=(",", ":"))
@@ -284,12 +284,24 @@ def render_report(results_dir: Path, output_dir: Path, *, protocol_path: Path | 
         summary, valid, raw = _report_view(lock, result, oracle_rows)
         rows = _rows(lock, result, summary, valid, raw, oracle_rows)
         refinement = None
+        baseline_path=root/'baseline_precision/result.json'
+        baseline=read_json_checked(baseline_path) if baseline_path.exists() else None
         refinement_path = root / 'refinement/result.json'
+        if baseline:
+            filename=baseline['source_refinement_filename']
+            if Path(filename).name!=filename:raise ValueError('Invalid baseline source filename')
+            refinement_path=root/'refinement'/filename
+        if refinement_path.with_suffix(refinement_path.suffix+'.gz').exists():
+            refinement_path=refinement_path.with_suffix(refinement_path.suffix+'.gz')
         if refinement_path.exists():
             from .refinement import refined_summary, _donor_allocation, refinement_alpha
             refinement_lock = read_json_checked(root / 'refinement/protocol.lock.json')
             body = {k:v for k,v in refinement_lock.items() if k!='protocol_hash' and not k.startswith('_')}
-            refinement = read_json_checked(refinement_path)
+            if refinement_path.suffix=='.gz':
+                import gzip
+                refinement=json.loads(gzip.decompress(refinement_path.read_bytes()))
+            else:
+                refinement = read_json_checked(refinement_path)
             if (canonical_hash(body)!=refinement_lock['protocol_hash']
                 or refinement['protocol_hash']!=refinement_lock['protocol_hash']
                 or refinement['upstream_protocol_hash']!=lock['protocol_hash']
@@ -304,8 +316,44 @@ def render_report(results_dir: Path, output_dir: Path, *, protocol_path: Path | 
                 if interval['alpha']!=expected or interval['parent_interval_id'] not in pool['parent_ids']:
                     raise ValueError('Saved refinement confidence allocation mismatch')
             summary=refined_summary(lock,list(valid.values()),refinement['subdomains'])
+            if baseline:
+                from .baseline_precision import baseline_summary
+                from .inference import alpha_at_checkpoint,exact_interval
+                quantities={c['interval_ids']['R0'] for c in lock['cells'] if c['model_kind']=='interacting'}
+                bp=baseline['policy']['error_pool'];original_pool=lock['bound_registry']['pools']['diagnostics']
+                if (baseline['content_hash']!=canonical_hash({k:v for k,v in baseline.items() if k!='content_hash'})
+                    or baseline['source_refinement_hash']!=refinement['content_hash']
+                    or baseline['upstream_result_hash']!=result['content_hash']
+                    or baseline['policy']['upstream_protocol_hash']!=lock['protocol_hash']
+                    or baseline['policy']['refinement_protocol_hash']!=refinement_lock['protocol_hash']
+                    or bp['donor_ids']!=['shell:0:z1:u1','shell:1:z1:u1'] or bp['M']!=len(quantities)
+                    or bp['A']!=original_pool['A']*2/original_pool['M'] or bp['original_pool']!=original_pool
+                    or set(baseline['interval_evidence'])!=quantities):
+                    raise ValueError('Saved matched-baseline evidence binding/allocation mismatch')
+                alpha=alpha_at_checkpoint(bp['A'],bp['M'],refinement['look'])
+                for interval in baseline['interval_evidence'].values():
+                    bound=exact_interval(interval['successes'],interval['trials'],alpha)
+                    if (interval['alpha']!=alpha or interval['interval']!=[bound.low,bound.high]
+                        or interval['trials']!=refinement_lock['initial_histories']*2**(refinement['look']-1)):
+                        raise ValueError('Saved baseline interval/count mismatch')
+                cells={c['cell_id']:c for c in lock['cells']}
+                for sub in baseline['baseline_bounds']:
+                    cid=sub['parent_cell_id'];new=baseline['interval_evidence'][cells[cid]['interval_ids']['R0']]['interval'];old=raw[cid]['intervals']['R0']
+                    if sub['R0']!=[max(new[0],old[0]),min(new[1],old[1])]:raise ValueError('Saved baseline intersection mismatch')
+                summary=baseline_summary(lock,list(valid.values()),refinement,baseline)
+                _csv(root/'tables/baseline_intervals.csv',('interval_id','successes','trials','look','alpha','interval'),
+                     [{'interval_id':key,**value} for key,value in baseline['interval_evidence'].items()])
             _csv(root/'tables/refined_subdomains.csv',('parent_cell_id','p_interval','intervals'),refinement['subdomains'])
         extra = read_json_checked(root / "claims.json").get("claims", []) if (root / "claims.json").exists() else []
+        # Duncal admits a zero-response counterpart for every demographic.
+        # This is the declared analytic obstruction, even when its standalone
+        # coarse risk enclosure has no positive lower endpoint.
+        for family in summary.certificates:
+            members=[r for r in summary.rows if family in r.get('families',())]
+            if members and all(r.get('analytic_unconstrained_detector') for r in members):
+                for tau in summary.certificates[family]:
+                    summary.certificates[family][tau]='nonmaterial'
+                    summary.envelopes[family][tau]['analytic_obstruction']='admissible_zero_response'
         claims = _claims(lock, result, summary, rows, theorem, extra)
         if refinement:
             parent_ids={s['parent_cell_id'] for s in refinement['subdomains']}
@@ -314,10 +362,13 @@ def render_report(results_dir: Path, output_dir: Path, *, protocol_path: Path | 
                 if claim['claim_id'].removeprefix('family:') in affected:
                     claim['scope']+='; continuous shared-efficiency subdomains with fresh confirmation'
                     claim['evidence_ids']+=['refinement_protocol','refinement_result']
+                    if baseline:claim['evidence_ids']+=['baseline_precision']
         inputs = {"protocol": protocol_file, "confirmation": root / "confirmation.json",
                   "matrix": root / "matrix.json", "interval_registry": root / "bound_registry.json"}
         for name, path in (("theorem", root / "theorem/deterministic.json"), ("independent_oracles", root / "independent_oracles.json"),
                            ('refinement_protocol',root/'refinement/protocol.lock.json'),('refinement_result',refinement_path),
+                           ('baseline_precision',baseline_path),
+                           ('resource_usage',root/'resource_usage.json'),
                            ("custom_claims", root / "claims.json"), ("environment", root / "environment.json"),
                            ("pilot", root / "pilot.json"), ("calibration", root / "calibration.json"),
                            ("analytic_controls", root / "analytic_controls.json"), ("correctness", root / "correctness.json")):
@@ -331,7 +382,8 @@ def render_report(results_dir: Path, output_dir: Path, *, protocol_path: Path | 
         write_json_atomic(root / "model_rows.json", {"protocol_hash": lock["protocol_hash"], "rows": rows})
         write_json_atomic(root / "family_envelopes.json", {"protocol_hash": lock["protocol_hash"], "envelopes": summary.envelopes,
                                                           "certified": summary.certified, "possible": summary.possible, "certificates": summary.certificates,
-                                                          'refinement_hash':refinement['content_hash'] if refinement else None})
+                                                          'refinement_hash':refinement['content_hash'] if refinement else None,
+                                                          'baseline_precision_hash':baseline['content_hash'] if baseline else None})
         write_json_atomic(root / "conclusions.json", {"protocol_hash": lock["protocol_hash"], "purpose": lock["purpose"], "claims": claims})
         _csv(root / "tables/model_rows.csv", ROW_FIELDS, rows)
         _csv(root / "tables/demographics.csv", ("model_id", "mu", "age_years", "speed_id", "future_multiplier"), lock.get("config", {}).get("models", []))
@@ -382,13 +434,15 @@ def render_report(results_dir: Path, output_dir: Path, *, protocol_path: Path | 
                  "## Interaction and observation sensitivity", "", f"[Matched interaction and ideal-silence differences]({link(root / 'tables/comparisons.csv')}). Differences retain their signs. Perfect simultaneous silence is an observation-model sensitivity, not a competitor using the same telescope data.", "",
                  "## Continuum reference", "", f"Saved deterministic status: `{theorem.get('status', 'unperformed')}`. The warning display on PDF page 8 is damaged; the implemented warning formula is an independent repair from E8. Original source scripts were not supplied or reproduced. Continuum asymptotics are not imported as exponents for the finite stellar catalog.", "",
                  f"[Exact/leading reference table]({link(root / 'tables/theorem_ratios.csv')}); [finite-shell trial counts and rigorous bounds]({link(root / 'tables/reference_checks.csv')}).", "",
-                 "## Costs, failures, and missing work", "", f"Resource totals recorded before this rendering: `{json.dumps(ledger.usage(), sort_keys=True)}`. These sum recorded job durations, including nested checks; they are not unique elapsed wall time. The append-only resource ledger also records this rendering after it finishes.", "",
+                 "## Costs, failures, and missing work", "", f"Resource totals recorded before this rendering: `{json.dumps(read_json_checked(root/'resource_usage.json') if (root/'resource_usage.json').exists() else ledger.usage(), sort_keys=True)}`. Recorded job durations include nested checks and are not unique elapsed wall time. Saved phase windows separately include computation, I/O and prefetch. The append-only resource ledger also records this rendering after it finishes.", "",
                  f"Saved scientific environment: `{json.dumps(environment_summary, sort_keys=True)}`. Current report preflight: `{json.dumps(preflight, sort_keys=True)}`.", "",
                  "Runtime estimates and sample checkpoints impose no deadline, launch allowance, byte quota, or maximum precision look. Actual capacity interruptions preserve resumable work. An interruption is not a scientific outcome.", "",
                  f"Unperformed or invalid required result rows: `{json.dumps([r['cell_id'] for r in rows if r['completion_status'] == 'pending'])}`.", "",
                  "## Artifacts", ""]
         if refinement:
             lines.extend(['The continuous shared-efficiency refinement covers every p in [.44,.94] with contiguous subdomains; it assumes no monotonicity of conditional risk. Family envelopes use these tighter bounds where supplied. The original per-model table retains its coarse bounds; [refined subdomains]('+link(root/'tables/refined_subdomains.csv')+') provide the replacement evidence. Fresh stage-8 confirmation streams are independent of the original histories. Its error allowance comes only from analytically zero-error ideal-S1 intervals, preserving the original total error pool; no unused data-dependent checkpoint allowance is reclaimed.',''])
+        if baseline:
+            lines.extend(['Matched-baseline intervals use unweighted arrival flags from the same completed fresh checkpoint, for all 52 declared interacting baselines. They intersect the original baseline intervals. Two mathematically certain free-shell endpoint intervals fund these extra confidence events; together with the 12 ideal-S1 donors, the total Monte Carlo error allowance remains .05. [Baseline counts and intervals]('+link(root/'tables/baseline_intervals.csv')+'). Extra prefetched batches remain recorded and are not promoted into a partial-look confidence claim.',''])
         for name, slot in figures.items():
             if slot["status"] == "generated":
                 lines.extend([f"![{name.replace('_', ' ')}]({link(Path(slot['path']))})", ""])
@@ -403,6 +457,7 @@ def render_report(results_dir: Path, output_dir: Path, *, protocol_path: Path | 
                    "comparisons": root / "tables/comparisons.csv", "theorem_table": root / "tables/theorem_ratios.csv"}
         outputs.update(demographics=root / "tables/demographics.csv", reference_checks=root / "tables/reference_checks.csv")
         if refinement:outputs['refinement_table']=root/'tables/refined_subdomains.csv'
+        if baseline:outputs['baseline_table']=root/'tables/baseline_intervals.csv'
         outputs.update({"figure_" + name: path for name, path in figure_paths.items()})
         manifest = {"protocol_hash": lock["protocol_hash"], "figures": figures,
                     "artifacts": {name: {"path": str(path.resolve()), "sha256": _sha(path)} for name, path in outputs.items()}}

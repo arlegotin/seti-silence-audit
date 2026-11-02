@@ -54,6 +54,7 @@ def test_regeneration_is_saved_evidence_only_and_preserves_scoped_schema(report_
     root, output = report_project()
     first = render_report(root, output)
     tables = (root / "tables/model_rows.csv").read_bytes()
+    assert b'\r\n' not in tables
     conclusions = (root / "conclusions.json").read_bytes()
     second = render_report(root, output)
     assert (root / "tables/model_rows.csv").read_bytes() == tables
@@ -88,6 +89,17 @@ def test_missing_mandatory_cell_remains_in_outer_envelope_and_blocks_positive(re
     claims = read_json_checked(root / "conclusions.json")["claims"]
     assert next(c for c in claims if c["claim_id"] == "family:interacting/primary")["outcome_category"] is None
     assert "assumed_F2" in (output / "REPORT.md").read_text()
+
+
+def test_report_preserves_saved_resource_costs_without_the_local_execution_ledger(report_project):
+    from seti_audit.artifacts import write_json_atomic
+    from seti_audit.reporting import render_report
+
+    root,output=report_project()
+    write_json_atomic(root/'resource_usage.json',{'recorded_history_evaluations':123456789,
+                                              'scope':'Instrumented jobs; historical unit-test calls are not exhaustively totaled.'})
+    render_report(root,output)
+    assert '123456789' in (output/'REPORT.md').read_text()
 
 
 def test_fully_excluded_family_has_no_conditional_risk(report_project):

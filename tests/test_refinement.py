@@ -162,8 +162,16 @@ def test_report_uses_saved_refinement_and_checks_its_upstream_binding(frozen_smo
     assert read_json_checked(root/'family_envelopes.json')['refinement_hash']==result['content_hash']
     text=(root.parent/'report/REPORT.md').read_text()
     assert 'continuous shared' in text.lower()
+    import gzip
+    saved_table=(root/'tables/refined_subdomains.csv').read_bytes()
+    compressed=root/'refinement/result.json.gz'
+    compressed.write_bytes(gzip.compress((root/'refinement/result.json').read_bytes(),mtime=0))
+    (root/'refinement/result.json').unlink()
+    render_report(root,root.parent/'report')
+    assert (root/'tables/refined_subdomains.csv').read_bytes()==saved_table
+    assert read_json_checked(root/'evidence.json')['evidence']['refinement_result']['path'].endswith('.json.gz')
     result['upstream_result_hash']='changed';result.pop('content_hash');result['content_hash']=canonical_hash(result)
-    write_json_atomic(root/'refinement/result.json',result)
+    compressed.write_bytes(gzip.compress((__import__('json').dumps(result)+'\n').encode(),mtime=0))
     with pytest.raises(ValueError,match='refinement|upstream'):
         render_report(root,root.parent/'report')
 

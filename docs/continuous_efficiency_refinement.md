@@ -67,3 +67,28 @@ export the refined subdomains, recompute the affected family envelopes, and
 bind them to the saved refinement evidence. Missing empirical scan times and
 final-selection calibration remain empirical limitations; a loose numerical
 enclosure is not relabeled as such a limitation.
+
+The close k=10 comparison also requires matching baseline precision. Its
+unweighted arrival flags already exist in the independent fresh confirmation.
+The additional baseline analysis covers all 52 declared interacting baseline
+quantities at the same deterministic checkpoints. It intersects their new
+exact-binomial intervals with the original intervals; no model or risk target
+is selected from the data.
+
+Two other registered intervals have zero actual noncoverage probability: the
+free-shell joint CDF at (z,u)=(1,1) equals one at each horizon. A B_h point
+guarantees H<=h, and D>T gives (A-D)/(A-T)<1. Their exact-binomial upper endpoint
+is always one. Their share `.025*2/2536` funds the 52 baseline quantities, with
+`alpha=A_base/[52*j*(j+1)]`. These donors are disjoint from the 12 ideal-S1
+donors. The remaining original diagnostic events, shared-efficiency events,
+and baseline events still total at most .025; the primary pool remains .025.
+No independence between baseline and null-audit intervals is needed for this
+union bound. The baseline policy is recorded before reading the saved flags.
+
+In this execution the combined calculation resolved all targeted comparisons
+at completed fresh look 4. Extra prefetched batches were retained and the
+unneeded sampling process was interrupted after the decisions were certified.
+They are not used as partial-look confidence evidence. The baseline artifact
+binds its policy and intervals to that complete weights checkpoint; report
+regeneration reads both without simulation. The implementation is
+`seti_audit.baseline_precision.refine_baselines`.

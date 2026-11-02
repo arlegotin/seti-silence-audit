@@ -11,3 +11,10 @@ results/bootstrap-usage.jsonl
 results/checkpoints/
 results/smoke/
 results/smoke-final/
+results/refinement/checkpoints/
+results/refinement/checkpoint-*.json
+results/summaries/*.json
+results/**/resources.jsonl
+results/**/resources.jsonl.lock
+results/**/run.lock
+results/checkpoint_summary.json

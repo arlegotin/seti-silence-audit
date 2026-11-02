@@ -4,7 +4,11 @@ A reproducible research audit of what the UCLA 2020–2023 radio null says about
 
 The question is whether hearing no radio signals narrows the range of physical-arrival probabilities in the declared models. Radio silence and physical safety are different observations. Allowing an invisible counterpart of every model prevents full-family contraction; the conditional radio-bright comparison remains a separate numerical question.
 
-The [blueprint](docs/blueprint.md), [specification](docs/superpowers/specs/2026-11-02-seti-silence-audit-design.md), and [implementation plan](docs/superpowers/plans/2026-11-02-seti-silence-audit.md) define the experiment. The computational pipeline is implemented; full research confirmation and review are still pending. No empirical arrival forecast is claimed.
+The [blueprint](docs/blueprint.md), [specification](docs/superpowers/specs/2026-11-02-seti-silence-audit-design.md), and [implementation plan](docs/superpowers/plans/2026-11-02-seti-silence-audit.md) define the experiment. The conditional research calculations are complete; final independent review is pending. No empirical arrival forecast is claimed.
+
+The [evidence report](report/REPORT.md) finds material narrowing for persistent bright emitters: the upper model-risk envelope falls from about 11% to about 4% under the nominal detector, or below 8% across the assumed efficiency interval [.44,.94]. The faster-future-birth control also passes the declared narrowing criterion after matching baseline precision. These are conditional model results, not estimates of the real-world chance of alien visitors.
+
+Under the nominal detector, uncommon compatible emission, a short radio lifetime, and intermittent emission rule out material narrowing by the declared criterion. Invisible counterparts and zero detector response prevent full-family contraction analytically. The matched independent-site comparison gives a similar primary upper envelope, about 4%. Exact scan times and empirical final-selection calibration remain unavailable, so a telescope-calibrated arrival forecast remains unsupported.
 
 Use native Python 3.12 or newer:
 
@@ -53,6 +57,21 @@ python -m seti_audit report --protocol results/protocol.lock.json --from-results
 ```
 
 Use `--resume` on the refinement `run` command after interruption. Its confidence allowance comes from analytically zero-error ideal-S1 interval allocations, preserving the original total error allowance. It covers the full shared-efficiency interval, preserves original evidence, uses fresh stage-8 streams, and doubles precision as needed. The report keeps the original per-model rows and separately exports refined subdomains and the resulting family envelopes. An original checkpoint labeled `checkpoint_complete_refinement_pending` still requires this additional work.
+
+The published run resolved the remaining close comparison by matching its baseline precision at completed fresh look 4. This uses saved unweighted flags, all 52 declared interacting baselines, and a separate allowance from two certain free-shell CDF endpoints. The complete [method and confidence accounting](docs/continuous_efficiency_refinement.md) explain the combined result. To reproduce that saved-checkpoint analysis while the local checkpoint store is present:
+
+```python
+from pathlib import Path
+from seti_audit.artifacts import read_json_checked
+from seti_audit.baseline_precision import refine_baselines
+
+root = Path("results").resolve()
+original = read_json_checked(root / "protocol.lock.json") | {"_output_dir": str(root)}
+fresh = read_json_checked(root / "refinement/protocol.lock.json") | {"_output_dir": str(root / "refinement")}
+refine_baselines(original, fresh, root / "refinement/checkpoint-4.json", root / "baseline_precision")
+```
+
+The final report reads the compressed completed checkpoint and matched-baseline artifact directly. It does not require raw trajectories or the local checkpoint store. Original and fresh sampling interruptions, including extra prefetched histories, remain in the resource records; no incomplete look is used for a confidence claim.
 
 The matrix contains 16 primary demographics, four age diagnostics, and 16 same-star ideal settings with paired continuation replays. Future k=0/10 controls cover E1/E0; age diagnostics use E1 and the three point detectors. It is a one-factor robustness design. The source theorem, finite independent-site model, interacting model, and perfect-silence comparator retain their different conditioning and interpretation.
 
