@@ -203,3 +203,69 @@ def null_weight(history: History, geometry: Geometry, schedule: Schedule,
 
     return WeightBounds(product("low"), product("high"),
                         tuple(event for weight in weights for event in weight.rechecks))
+
+
+def batch_null_weights(batch, geometry, schedule, emission, detector, visit_dependence="nominal"):
+    """Vectorized F1 response, with scalar precision fallback at boundaries."""
+    count = len(batch.arrival_years)
+    if emission.zeta == 0:
+        return np.ones(count), np.ones(count), {"source_precision_rechecks": 0}
+    if schedule.schedule_grade != "coarsened_F1":
+        from .model import history_at
+        weights = [null_weight(history_at(batch, i), geometry, schedule, emission, detector, visit_dependence)
+                   for i in range(count)]
+        return (np.array([w.low for w in weights]), np.array([w.high for w in weights]),
+                {"scalar_histories": count, "source_precision_rechecks": sum(len(w.rechecks) for w in weights)})
+    if visit_dependence not in {"nominal", "robust"}:
+        raise ValueError("Unknown repeated-visit dependence model")
+    by_site = defaultdict(list)
+    for visit in schedule.bounded_visits:
+        by_site[visit.site_id].append(visit)
+    log_low, log_high = np.zeros(count), np.zeros(count)
+    zero_low, zero_high = np.zeros(count, dtype=bool), np.zeros(count, dtype=bool)
+    rechecks = 0
+    for index, site_id in enumerate(geometry.site_ids):
+        rows = np.flatnonzero(batch.accepted_mask[:, index])
+        if not len(rows) or not by_site[site_id]:
+            continue
+        birth, radius = batch.birth_years[rows, index], float(geometry.radii_ly[index])
+        start = birth + radius + emission.delay_years
+        end = np.full(len(rows), np.inf) if emission.lifetime_years is None else start + emission.lifetime_years
+        tolerance = np.maximum(1e-12, 64 * np.finfo(float).eps * np.maximum.reduce(
+            (np.ones(len(rows)), np.abs(birth), np.full(len(rows), max(radius, emission.delay_years, emission.lifetime_years or 0.)))))
+        uncertain = np.zeros(len(rows), dtype=bool)
+        maximum, minimum = np.zeros(len(rows)), np.zeros(len(rows))
+        for visit in by_site[site_id]:
+            certain, possible = np.ones(len(rows), dtype=bool), np.zeros(len(rows), dtype=bool)
+            for a, b in visit.allowed_intervals:
+                certain &= (start <= a) & (end >= b)
+                length = np.minimum(end, b) - np.maximum(start, a)
+                target = 0. if detector.allow_partial else 2 * visit.duration_year
+                possible |= length > 0 if detector.allow_partial else length >= target
+                uncertain |= (np.abs(start - a) <= tolerance) | (np.abs(end - b) <= tolerance) | (np.abs(length - target) <= tolerance)
+            if detector.allow_partial:
+                low_d, high_d = np.zeros(len(rows)), possible.astype(float)
+            else:
+                if emission.activity == "ctmc":
+                    f = emission.on_fraction
+                    survival = math.exp(-(1 - f) / (emission.corr_days / 365.25) * 2 * visit.duration_year)
+                    a_low, a_high = f * f * survival, f * survival
+                else:
+                    a_low = a_high = 1.
+                low_d = certain * detector.pair_low * a_low
+                high_d = possible * detector.pair_high * a_high
+            maximum += high_d
+            minimum = np.maximum(minimum, low_d)
+        lower = 1 - emission.zeta * np.minimum(1., maximum)
+        upper = 1 - emission.zeta * minimum
+        for j in np.flatnonzero(uncertain):
+            exact = source_null_weight(float(birth[j]), radius, schedule, site_id, emission, detector, visit_dependence)
+            lower[j], upper[j] = exact.low, exact.high
+            rechecks += 1
+        zero_low[rows] |= lower == 0
+        zero_high[rows] |= upper == 0
+        log_low[rows] += np.log(np.where(lower > 0, lower, 1.))
+        log_high[rows] += np.log(np.where(upper > 0, upper, 1.))
+    low, high = np.exp(log_low), np.exp(log_high)
+    low[zero_low], high[zero_high] = 0., 0.
+    return low, high, {"source_precision_rechecks": rechecks}

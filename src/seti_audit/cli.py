@@ -33,7 +33,33 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("acquire", "validate-data"):
         command = subcommands.add_parser(name)
         command.add_argument("--config", type=Path, default=Path("config/protocol.json"))
+    calibration = subcommands.add_parser("calibrate", help="Measure throughput and plan initial precision")
+    calibration.add_argument("--config", type=Path, default=Path("config/protocol.json"))
+    calibration.add_argument("--sizes", nargs="+", type=int, default=[1024, 4096, 16384])
+    calibration.add_argument("--out", type=Path, default=Path("results/calibration.json"))
+    pilot_command = subcommands.add_parser("pilot", help="Run development mechanism controls")
+    pilot_command.add_argument("--config", type=Path, default=Path("config/protocol.json"))
+    pilot_command.add_argument("--histories", type=int, default=1024)
+    pilot_command.add_argument("--out", type=Path, default=Path("results/pilot.json"))
     options = parser.parse_args(argv)
+    if options.command in {"calibrate", "pilot"}:
+        from dataclasses import asdict
+        from .data import load_catalog, load_schedule
+        from .experiments import calibrate, pilot
+        protocol = load_protocol(options.config)
+        catalog = load_catalog(Path("docs/blueprint.md"), Path("data"))
+        schedule = load_schedule(catalog, Path("inputs"), Path("data"))
+        ledger = ResourceLedger(Path("results/resources.jsonl"))
+        if options.command == "calibrate":
+            result = calibrate(protocol, catalog, schedule, ledger, sizes=tuple(options.sizes))
+            brief = {"projected_initial_seconds": result.projected_seconds, "rss_bytes": result.rss_bytes,
+                     "initial_survivors": result.initial_survivors, "evidence_ids": result.evidence_ids}
+        else:
+            result = pilot(protocol, catalog, schedule, ledger, n_histories=options.histories)
+            brief = {"passed": result.passed, "evidence_ids": result.evidence_ids}
+        write_json_atomic(options.out, asdict(result))
+        print(json.dumps(brief))
+        return 0
     if options.command == "theorem-check":
         from .theorem import check_theorem
         ledger = ResourceLedger(Path("results/resources.jsonl"))

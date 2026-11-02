@@ -4,7 +4,8 @@ import math
 
 import numpy as np
 
-from .contracts import FirstClocks, FloatArray, FutureMarks, Geometry, History, ModelConfig
+from .contracts import (ClockBatch, FirstClocks, FloatArray, FutureMarks, Geometry,
+                        History, HistoryBatch, ModelConfig)
 
 
 def _uniform_open(rng, size: int) -> tuple[FloatArray, int]:
@@ -243,3 +244,133 @@ def simulate_history(clocks: FirstClocks, geometry: Geometry, intersite: bool = 
                                         "speed_gap_authoritative": True}
     return History(np.array(accepted, dtype=np.int64), clocks.birth_years, clocks.speeds, clocks.speed_gaps,
                    occupation, arrival, censored, diagnostics)
+
+
+def sample_clock_batch(config: ModelConfig, geometry: Geometry, rng, n_histories: int,
+                       conditioning="unconditional", horizon_years=100) -> ClockBatch:
+    if not isinstance(n_histories, int) or n_histories < 0:
+        raise ValueError("Nonnegative batch length required")
+    sites = len(geometry.site_ids)
+    uniforms, rejected = _uniform_open(rng, n_histories * sites)
+    hazards = -np.log(uniforms).reshape(n_histories, sites)
+    if conditioning in {"lower_cone", "ideal_silence"}:
+        inverse = _floor_inverse_speed(config) if conditioning == "lower_cone" else 1.
+        origin = np.maximum(-config.age_years, -geometry.radii_ly * inverse)
+        hazards += cumulative_hazard(origin, config, sites)
+    elif conditioning != "unconditional":
+        raise ValueError("Unknown batch clock conditioning")
+    births = invert_hazard(hazards.ravel(), config, sites, horizon_years).reshape(n_histories, sites)
+    speeds, gaps, diagnostics = sample_speed_marks(config, rng, n_histories * sites)
+    diagnostics["open_uniform_rejections"] += rejected
+    diagnostics["conditioning"] = conditioning
+    return ClockBatch(births, speeds.reshape(births.shape), gaps.reshape(births.shape), diagnostics)
+
+
+def simulate_batch(clocks: ClockBatch, geometry: Geometry, intersite: bool = True) -> HistoryBatch:
+    """Rank-wise propagation using O(batch*sites) working arrays.
+
+    Each flagged history is independently recomputed by the scalar reference,
+    including original-operand high-precision boundary comparisons.
+    """
+    births, gaps = clocks.birth_years, clocks.speed_gaps
+    count, sites = births.shape
+    if sites != len(geometry.site_ids):
+        raise ValueError("Clock/geometry batch site mismatch")
+    site_rank = np.argsort(np.argsort(np.array(geometry.site_ids)))
+    order = np.lexsort((np.broadcast_to(site_rank, births.shape), births), axis=1)
+    accepted = np.zeros(births.shape, dtype=bool)
+    occupation = np.full(births.shape, np.inf)
+    arrival = np.full(count, np.inf)
+    scale = np.ones(count)
+    flags = np.zeros(count, dtype=bool)
+    rows = np.arange(count)
+    for rank in range(sites):
+        indices = order[:, rank]
+        b = births[rows, indices]
+        finite = np.isfinite(b) & (b <= 100)
+        if not np.any(finite):
+            break
+        keep = finite.copy()
+        if intersite:
+            previous = occupation[rows, indices]
+            tolerance = np.maximum(1e-12, 64 * np.finfo(float).eps * np.maximum.reduce((np.abs(b), np.abs(previous), scale)))
+            # Exclude infinities before subtraction, avoiding spurious warnings.
+            compare = finite & np.isfinite(previous)
+            flagged = np.zeros(count, dtype=bool)
+            flagged[compare] = np.abs(b[compare] - previous[compare]) <= tolerance[compare]
+            flags |= flagged
+            keep &= b < previous
+        chosen = rows[keep]
+        index = indices[keep]
+        if not len(chosen):
+            continue
+        accepted[chosen, index] = True
+        radius, q = geometry.radii_ly[index], gaps[chosen, index]
+        earth = (b[keep] + radius) + radius * q
+        arrival[chosen] = np.minimum(arrival[chosen], earth)
+        if intersite:
+            distances = geometry.distances_ly[index]
+            fronts = (b[keep, None] + distances) + distances * q[:, None]
+            occupation[chosen] = np.minimum(occupation[chosen], fronts)
+            scale[chosen] = np.maximum.reduce((scale[chosen], np.abs(b[keep]), np.max(distances * (1 + q[:, None]), axis=1)))
+        else:
+            occupation[chosen, index] = b[keep]
+    survives, within, censored = arrival > 0, (arrival > 0) & (arrival <= 100), arrival > 100
+    if sites:
+        operand_scale = np.maximum(np.max(np.where(accepted, np.abs(births), 0.), axis=1),
+                                   np.max(np.where(accepted, geometry.radii_ly * (1 + gaps), 0.), axis=1))
+        tolerance = np.maximum(1e-12, 64 * np.finfo(float).eps * np.maximum(100., operand_scale))
+        flags |= np.isfinite(arrival) & ((np.abs(arrival) <= tolerance) | (np.abs(arrival - 100) <= tolerance))
+    rechecks = {}
+    for i in np.flatnonzero(flags):
+        scalar = simulate_history(FirstClocks(births[i], clocks.speeds[i], gaps[i]), geometry, intersite)
+        accepted[i] = False
+        accepted[i, scalar.accepted_indices] = True
+        occupation[i], arrival[i] = scalar.occupation_years, scalar.arrival_year
+        survives[i], within[i], censored[i] = scalar.survives, scalar.arrives_within_horizon, scalar.right_censored
+        rechecks[str(i)] = scalar.diagnostics
+    for array in (order, accepted, occupation, arrival, survives, within, censored):
+        array.setflags(write=False)
+    return HistoryBatch(births, clocks.speeds, gaps, order, accepted, occupation, arrival,
+                        censored, survives, within,
+                        {"scalar_rechecks": rechecks, "batch_clock_diagnostics": clocks.diagnostics,
+                         "intersite": intersite})
+
+
+def history_at(batch: HistoryBatch, index: int) -> History:
+    if not 0 <= index < len(batch.arrival_years):
+        raise IndexError("History index outside batch")
+    order = batch.candidate_order[index]
+    accepted = order[batch.accepted_mask[index, order]]
+    diagnostics = batch.diagnostics.get("scalar_rechecks", {}).get(str(index), {}) | {
+        "batch_clock_diagnostics": batch.diagnostics.get("batch_clock_diagnostics", {}),
+        "survives": bool(batch.survives[index]), "arrives_within_horizon": bool(batch.arrives_within_horizon[index])}
+    return History(accepted, batch.birth_years[index], batch.speeds[index], batch.speed_gaps[index],
+                   batch.occupation_years[index], float(batch.arrival_years[index]), bool(batch.right_censored[index]), diagnostics)
+
+
+def simulate_microbatches(clocks: ClockBatch, geometry: Geometry, *, available_bytes: int,
+                          intersite=True) -> HistoryBatch:
+    """Adapt scratch space; retained logical clocks/draws remain unchanged."""
+    from .resources import physical_batch_size
+    count, sites = clocks.birth_years.shape
+    if count == 0:
+        return simulate_batch(clocks, geometry, intersite)
+    size = physical_batch_size(count, bytes_per_history=max(1, sites) * 128, available_bytes=available_bytes)
+    parts = []
+    rechecks = {}
+    for offset in range(0, count, size):
+        end = min(count, offset + size)
+        subclocks = ClockBatch(clocks.birth_years[offset:end], clocks.speeds[offset:end], clocks.speed_gaps[offset:end])
+        part = simulate_batch(subclocks, geometry, intersite)
+        rechecks.update({str(int(i) + offset): value for i, value in part.diagnostics["scalar_rechecks"].items()})
+        parts.append(part)
+    def join(name):
+        result = np.concatenate([getattr(p, name) for p in parts])
+        result.setflags(write=False)
+        return result
+    return HistoryBatch(clocks.birth_years, clocks.speeds, clocks.speed_gaps,
+                        *(join(name) for name in ("candidate_order", "accepted_mask", "occupation_years", "arrival_years",
+                                                  "right_censored", "survives", "arrives_within_horizon")),
+                        {"scalar_rechecks": rechecks, "batch_clock_diagnostics": clocks.diagnostics, "intersite": intersite,
+                         "physical_batch_size": size})

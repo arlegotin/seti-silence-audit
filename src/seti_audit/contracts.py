@@ -307,6 +307,60 @@ class Summary:
     interval_evidence: dict
 
 
+@dataclass(frozen=True)
+class ClockBatch:
+    birth_years: FloatArray
+    speeds: FloatArray
+    speed_gaps: FloatArray
+    diagnostics: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        arrays = [np.asarray(getattr(self, name), dtype=float) for name in ("birth_years", "speeds", "speed_gaps")]
+        shape = arrays[0].shape
+        if len(shape) != 2 or any(a.shape != shape for a in arrays):
+            raise ValueError("Batch clocks must share (history,site) shape")
+        checked = FirstClocks(*(a.ravel() for a in arrays))
+        for name in ("birth_years", "speeds", "speed_gaps"):
+            object.__setattr__(self, name, getattr(checked, name).reshape(shape))
+
+
+@dataclass(frozen=True)
+class HistoryBatch:
+    birth_years: FloatArray
+    speeds: FloatArray
+    speed_gaps: FloatArray
+    candidate_order: IntArray
+    accepted_mask: NDArray[np.bool_]
+    occupation_years: FloatArray
+    arrival_years: FloatArray
+    right_censored: NDArray[np.bool_]
+    survives: NDArray[np.bool_]
+    arrives_within_horizon: NDArray[np.bool_]
+    diagnostics: dict
+
+
+@dataclass(frozen=True)
+class CalibrationResult:
+    initial_survivors: dict[int, int]
+    initial_diagnostic_proposals: dict[int, int]
+    logical_batch_size: int
+    projected_seconds: float
+    proposal_costs: dict[int, float]
+    acceptance_bounds: dict[int, WeightBounds]
+    timings: dict
+    rss_bytes: int
+    execution_recommendations: tuple[str, ...]
+    evidence_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class PilotResult:
+    passed: bool
+    evidence_ids: tuple[str, ...]
+    controls: dict
+    diagnostics: dict
+
+
 def load_protocol(path: Path) -> Protocol:
     raw = read_json_checked(path)
     if raw.get("schema_version") != 1:
