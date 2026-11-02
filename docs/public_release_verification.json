@@ -1,0 +1,222 @@
+{
+  "scope": "Public-release validation; local path prefixes are normalized to placeholders. Scientific source and frozen evidence were not modified.",
+  "source_verification": {
+    "recorded_utc": "2026-11-02T20:37:36.443953+00:00",
+    "root": "$RELEASE_COPY",
+    "passed": true,
+    "scope": "Fresh copy of the tracked public source plus release metadata, with no raw checkpoint stores, virtual environment, package caches or credentials; uses the already installed pinned scientific dependencies.",
+    "scientific_source_hashes": {
+      "src/seti_audit/__init__.py": "d651b928eb4924c8f01239267bf191c023b48ef4f61cd24655401b98f5785e1a",
+      "src/seti_audit/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
+      "src/seti_audit/acquisition.py": "7e9b200d95709cfc3747f26f37ff9fa607efc1a841a6a6ad37f51ac2f203a28a",
+      "src/seti_audit/artifacts.py": "f6a113f09ac9d996e98665d80d5ebbf72ef94ed59a5881e22f61cac3bd1ad85a",
+      "src/seti_audit/baseline_precision.py": "48288eb88cfb3fd392204df0e10b24daaf54fac7c20be9717e50590bc427f139",
+      "src/seti_audit/cli.py": "665d0aeb9b9db5119d6b065f73175713c503ddaac690b84ca97bc7b02970ab08",
+      "src/seti_audit/contracts.py": "d7faed3a9228ed4b171f35c084adff04227af85debc934a366c62b495f7042fe",
+      "src/seti_audit/data.py": "f7f905d28c938d2aa9151e5a1482e1224de3f09a49c620eb5e5bf27fcb89a70c",
+      "src/seti_audit/detection.py": "a968b4b40d94dc93d9bec2a7ed2480425fe35829e433f60a643656d6d966815b",
+      "src/seti_audit/experiments.py": "bb92df90b9981b7ba6acb8983f9ed07641acf5665415236425728633d02a4819",
+      "src/seti_audit/inference.py": "63dcfc5ff687318f4770e22992b1099020a0478cade21dd66ea62be808792ea0",
+      "src/seti_audit/model.py": "5801869d101086af0fb16d200c49eae692b579e0a41f3a3f0297d173214b404a",
+      "src/seti_audit/oracles.py": "88849851f5eed75f8ba2a1ac81e9f6212a368acd1182d396904dfcbd9af3999a",
+      "src/seti_audit/refinement.py": "eb17fbc57ee86f94dbd42ce043d028762de2337f75d48f37089385a318c69890",
+      "src/seti_audit/reporting.py": "5d058c02f1d705f40339b0197697c939869703224e64ba3ea0410d16853d901b",
+      "src/seti_audit/resources.py": "fc16edc9e6e3fce64f5d818f37237b483fd1233b55894bd5a51385fec4da74c6",
+      "src/seti_audit/runner.py": "95138237421a30a4833f887d67df5db71a2b7d493e3284302bf9cf905d0c7a31",
+      "src/seti_audit/storage.py": "cd9c86473820e2dbe9b653bba550d24f280e15183f271b7ad9655d73a4c1c603",
+      "src/seti_audit/theorem.py": "9447b8089adef2c194a73ffc8d3aedc22232ff63a3b10c562bdaa59128d630c5"
+    },
+    "steps": [
+      {
+        "command": [
+          "$REPOSITORY/.venv/bin/python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "elapsed_seconds": 41.20713037496898,
+        "exit_code": 0,
+        "stdout": "........................................................................ [ 28%]\n........................................................................ [ 57%]\n........................................................................ [ 86%]\n..................................                                       [100%]\n250 passed in 40.90s\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "$REPOSITORY/.venv/bin/python",
+          "-m",
+          "seti_audit",
+          "report",
+          "--protocol",
+          "results/protocol.lock.json",
+          "--from-results",
+          "--out",
+          "$RELEASE_COPY/rebuilt-report"
+        ],
+        "elapsed_seconds": 4.353437292040326,
+        "exit_code": 0,
+        "stdout": "{\"protocol_hash\": \"e2536df02068d88ef9b201fe27d3a06cd7a353e3a30d4337468d47f58756b6ab\", \"report\": \"/private$RELEASE_COPY/rebuilt-report/REPORT.md\", \"artifacts\": 17}\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "$REPOSITORY/.venv/bin/python",
+          "-m",
+          "seti_audit",
+          "smoke",
+          "--config",
+          "config/protocol.json",
+          "--out",
+          "$RELEASE_COPY/synthetic-smoke"
+        ],
+        "elapsed_seconds": 0.722901750006713,
+        "exit_code": 0,
+        "stdout": "{\"status\": \"smoke_complete\", \"purpose\": \"synthetic smoke\", \"protocol_hash\": \"92f98dc2a434887d21eec21d1dfa89c532532360abddd71fcf82d72fb46235da\", \"report\": {\"path\": \"/private$RELEASE_COPY/synthetic-smoke/report/REPORT.md\", \"sha256\": \"6c08b86c2601f858fb5969325e06739e795fea28ba027978c9b5cf33aa7a4ebe\"}, \"elapsed_seconds\": 0.1848926250822842}\n",
+        "stderr": ""
+      }
+    ],
+    "research_output_hashes": {
+      "conclusions.json": "001d02809cf60e175d1a767125ea1209e7b3810e16bf7d27f58bb8b3e710ea0e",
+      "family_envelopes.json": "88850f094f62345b76b88d1b758a37e9a2ea687213b4c73806f0a413a08cbbc6",
+      "tables/baseline_intervals.csv": "31174eabb776eb568b221facfce3c4a3dcbf4e631dfd9d5ca644eff2d31b53e7",
+      "tables/comparisons.csv": "5adb8c2722d51496f6937798e650246ed6db6aa2d8c39be784743402ff4f8ba4",
+      "tables/demographics.csv": "08a89e78ab3a37af00b9e545f25d654950403bdd469cbf68b970273520a8de5d",
+      "tables/family_envelopes.csv": "9725d72dbaa4a39ff0587dd67ae37286f30acf79dd05ee66b696204f6b5c24bb",
+      "tables/model_rows.csv": "099af8ffdab077cbe328e6836b49fa370b41f10843faf4cebf1750b129be0c99",
+      "tables/reference_checks.csv": "19f17f6bfc26f743e7a24a11beebce5f3b3c832f7fab971b6802ce89cf38b1d9",
+      "tables/refined_subdomains.csv": "86f44f652d7b1745c0fcbbc57d51f6ea88f4fadbc110a3e9e4bba8bda597a7c8",
+      "tables/theorem_ratios.csv": "80cc6a418a3496a06099d84b4ffae80349634448a97e2f817444ace7aedc2fe7"
+    }
+  },
+  "package_verification": {
+    "passed": true,
+    "root": "$RELEASE_COPY",
+    "wheel": "$RELEASE_COPY/wheels/seti_silence_audit-0.1.0-py3-none-any.whl",
+    "wheel_sha256": "23bcb13ba4424fa76db6884773b1275c2290656494310aaec9c0f244a7f2a946",
+    "metadata": {
+      "Name": "seti-silence-audit",
+      "Version": "0.1.0",
+      "Author": "Artem Legotin",
+      "License-Expression": "AGPL-3.0-only AND CC-BY-4.0",
+      "Requires-Python": ">=3.12"
+    },
+    "all_19_scientific_modules_byte_identical": true,
+    "license_texts_match_sources": true,
+    "research_outputs_unchanged": true,
+    "steps": [
+      {
+        "command": [
+          "$REPOSITORY/.venv/bin/python",
+          "-m",
+          "pip",
+          "wheel",
+          "--no-deps",
+          "--no-cache-dir",
+          "--wheel-dir",
+          "$RELEASE_COPY/wheels",
+          "$RELEASE_COPY"
+        ],
+        "elapsed_seconds": 1.4373804579954594,
+        "exit_code": 0,
+        "stdout": "Processing $RELEASE_COPY\n  Installing build dependencies: started\n  Installing build dependencies: finished with status 'done'\n  Getting requirements to build wheel: started\n  Getting requirements to build wheel: finished with status 'done'\n  Preparing metadata (pyproject.toml): started\n  Preparing metadata (pyproject.toml): finished with status 'done'\nBuilding wheels for collected packages: seti-silence-audit\n  Building wheel for seti-silence-audit (pyproject.toml): started\n  Building wheel for seti-silence-audit (pyproject.toml): finished with status 'done'\n  Created wheel for seti-silence-audit: filename=seti_silence_audit-0.1.0-py3-none-any.whl size=121389 sha256=23bcb13ba4424fa76db6884773b1275c2290656494310aaec9c0f244a7f2a946\n  Stored in directory: /private/var/folders/q3/tm7kkng56417wgzydc4q8p8r0000gn/T/pip-ephem-wheel-cache-rssacymm/wheels/f3/7b/9a/c480818cc93fcd50381043423016ac1e284c35df20fe02fdfe\nSuccessfully built seti-silence-audit\n",
+        "stderr": "\n[notice] A new release of pip is available: 25.0 -> 26.3\n[notice] To update, run: $REPOSITORY/.venv/bin/python -m pip install --upgrade pip\n"
+      },
+      {
+        "command": [
+          "$REPOSITORY/.venv/bin/python",
+          "-m",
+          "pip",
+          "install",
+          "--no-deps",
+          "--target",
+          "$RELEASE_COPY/installed-public",
+          "$RELEASE_COPY/wheels/seti_silence_audit-0.1.0-py3-none-any.whl"
+        ],
+        "elapsed_seconds": 0.42249804199673235,
+        "exit_code": 0,
+        "stdout": "Processing $RELEASE_COPY/wheels/seti_silence_audit-0.1.0-py3-none-any.whl\nInstalling collected packages: seti-silence-audit\nSuccessfully installed seti-silence-audit-0.1.0\n",
+        "stderr": "\n[notice] A new release of pip is available: 25.0 -> 26.3\n[notice] To update, run: $REPOSITORY/.venv/bin/python -m pip install --upgrade pip\n"
+      },
+      {
+        "command": [
+          "$REPOSITORY/.venv/bin/python",
+          "-c",
+          "import seti_audit; print(seti_audit.__file__); assert seti_audit.__file__.startswith('$RELEASE_COPY/installed-public')"
+        ],
+        "elapsed_seconds": 0.01842791703529656,
+        "exit_code": 0,
+        "stdout": "$RELEASE_COPY/installed-public/seti_audit/__init__.py\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "$REPOSITORY/.venv/bin/python",
+          "-m",
+          "seti_audit",
+          "smoke",
+          "--config",
+          "config/protocol.json",
+          "--out",
+          "$RELEASE_COPY/installed-smoke"
+        ],
+        "elapsed_seconds": 0.7440622920403257,
+        "exit_code": 0,
+        "stdout": "{\"status\": \"smoke_complete\", \"purpose\": \"synthetic smoke\", \"protocol_hash\": \"92f98dc2a434887d21eec21d1dfa89c532532360abddd71fcf82d72fb46235da\", \"report\": {\"path\": \"/private$RELEASE_COPY/installed-smoke/report/REPORT.md\", \"sha256\": \"87796412fce38cca41db8765dee40e47f868dec0add5f119ce5549889008d2f9\"}, \"elapsed_seconds\": 0.18119695805944502}\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "$REPOSITORY/.venv/bin/python",
+          "-m",
+          "seti_audit",
+          "report",
+          "--protocol",
+          "results/protocol.lock.json",
+          "--from-results",
+          "--out",
+          "$RELEASE_COPY/installed-report"
+        ],
+        "elapsed_seconds": 3.8435319589916617,
+        "exit_code": 0,
+        "stdout": "{\"protocol_hash\": \"e2536df02068d88ef9b201fe27d3a06cd7a353e3a30d4337468d47f58756b6ab\", \"report\": \"/private$RELEASE_COPY/installed-report/REPORT.md\", \"artifacts\": 17}\n",
+        "stderr": ""
+      }
+    ]
+  },
+  "history_scan": {
+    "scan": "Local pattern scan of every reachable Git blob, plus gzip and zip members; this is not a guarantee against all possible secrets.",
+    "commits": 23,
+    "unique_blobs": 260,
+    "stored_blob_bytes": 68491918,
+    "bytes_inspected_including_compressed_contents": 206303466,
+    "patterns": [
+      "github_token",
+      "cloud_access_key",
+      "google_api_key",
+      "private_key",
+      "provider_api_key",
+      "slack_token",
+      "authenticated_url",
+      "credential_assignment"
+    ],
+    "findings": [
+      {
+        "path": "inputs/dryad_landing.html",
+        "blob": "02006b2eb22971fcc462692c64de7cf2a590d4c3",
+        "rule": "credential_assignment",
+        "disposition": "public_client_captcha_configuration",
+        "context": "AwsWafCaptcha.renderCaptcha on the unchanged anonymous Dryad landing page",
+        "reference": "https://docs.aws.amazon.com/waf/latest/developerguide/waf-js-captcha-api.html"
+      }
+    ],
+    "tracked_sensitive_filename_matches": [],
+    "known_public_page_fields": "The unchanged public Dryad landing-page snapshot contains anti-CSRF form fields from an anonymous page. No session cookies or authenticated credentials are retained with them.",
+    "head_before_publication": "febcdffea7453235623e0987b97cb43bb6192399",
+    "unresolved_findings": [],
+    "status": "passed_with_reviewed_public_page_match"
+  },
+  "citation_validation": "cffconvert --validate -i CITATION.cff: valid according to schema version 1.2.0",
+  "supporting_note_authorship": "Artem Legotin confirmed ownership and authorized CC-BY-4.0 publication on 2026-11-02.",
+  "license_sha256": {
+    "LICENSE": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+    "licenses/CC-BY-4.0.txt": "9ba9550ad48438d0836ddab3da480b3b69ffa0aac7b7878b5a0039e7ab429411"
+  }
+}

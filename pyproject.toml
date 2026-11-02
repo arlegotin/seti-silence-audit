@@ -1,13 +1,23 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "seti-silence-audit"
 version = "0.1.0"
 description = "Reproducible finite-target audit of a radio null and physical arrival"
+readme = "README.md"
+authors = [{name = "Artem Legotin"}]
+license = "AGPL-3.0-only AND CC-BY-4.0"
+license-files = ["LICENSE", "LICENSING.md", "THIRD_PARTY_NOTICES.md", "licenses/*"]
 requires-python = ">=3.12"
 dependencies = ["numpy", "scipy", "matplotlib", "pytest", "mpmath"]
+
+[project.urls]
+Repository = "https://github.com/arlegotin/seti-silence-audit"
+Issues = "https://github.com/arlegotin/seti-silence-audit/issues"
+Results = "https://github.com/arlegotin/seti-silence-audit/blob/main/report/REPORT.md"
+Reproduction = "https://github.com/arlegotin/seti-silence-audit/blob/main/REPRODUCE.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]
