@@ -131,3 +131,42 @@ def test_aggregate_rejects_components_exceeding_arrival_partition():
     components = {"null_low": 1, "null_high": 4, "J_low": 1, "J_high": 3, "K_low": 0, "K_high": 1}
     with pytest.raises(ValueError, match="partition"):
         AuditCounts(4, 1, 1, 1, 1., 1., components, {q: float(v) for q, v in components.items()})
+
+
+def test_ideal_reference_keeps_original_and_silence_conditioning_distinct():
+    from seti_audit.contracts import AuditCounts
+    from seti_audit.inference import summarize
+
+    lock = point_lock()
+    lock["cells"][0].update(ideal_reference=True, baseline_counts_id="base", ideal_silence_probability=.2,
+                             survival={"constant": .5})
+    counts = {"base": AuditCounts(100, 40, 100, 40, 100., 40., {}),
+              "c": AuditCounts(100, 10, 100, 10, 100., 10., {})}
+    row = summarize(counts, lock, {"R0": 1, "R": 1}).rows[0]
+    assert row["estimates"]["R0"] == .4
+    assert row["estimates"]["R"] == .1
+    assert row["estimates"]["likelihood"] == .4
+    assert row["intervals"]["likelihood"] == [.4, .4]
+
+
+def test_unconstrained_detector_keeps_base_risk_and_unknown_response():
+    from seti_audit.contracts import AuditCounts
+    from seti_audit.inference import summarize
+
+    lock = point_lock()
+    lock["cells"][0]["analytic_unconstrained_detector"] = True
+    row = summarize({"c": AuditCounts(100, 40, 0, 0, 0., 0., {})}, lock, {"R0": 1}).rows[0]
+    assert row["estimates"]["R0"] == .4
+    assert row["intervals"]["R"] == row["intervals"]["likelihood"] == [0., 1.]
+
+
+def test_missing_original_baseline_cannot_be_replaced_by_ideal_samples():
+    from seti_audit.contracts import AuditCounts
+    from seti_audit.inference import summarize
+
+    lock = point_lock()
+    lock["cells"][0].update(ideal_reference=True, baseline_counts_id="missing", ideal_silence_probability=.2,
+                             survival={"constant": .5})
+    row = summarize({"c": AuditCounts(100, 10, 100, 10, 100., 10., {})}, lock, {"R": 1}).rows[0]
+    assert row["estimates"]["R0"] is None
+    assert row["intervals"]["R0"] == [0., 1.]

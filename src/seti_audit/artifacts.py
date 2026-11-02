@@ -52,3 +52,13 @@ def read_json_checked(path: Path, expected_hash: str | None = None) -> dict:
     if not isinstance(value, dict):
         raise ValueError(f"Expected a JSON object: {path}")
     return value
+
+
+def commit_batch(output_dir: Path, batch_id: str, payload: dict, arrays: dict) -> str:
+    from .storage import commit_batch as publish
+    return publish(output_dir, batch_id, payload, arrays)
+
+
+def load_committed_batches(output_dir: Path, protocol_hash: str) -> tuple[dict, ...]:
+    from .storage import load_committed_batches as read
+    return read(output_dir, protocol_hash)

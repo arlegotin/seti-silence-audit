@@ -43,11 +43,11 @@ class ResourceLedger:
             stream.flush()
             os.fsync(stream.fileno())
 
-    def start(self, stage: str, ensemble_id: int | None = None) -> str:
+    def start(self, stage: str, ensemble_id: int | None = None, *, details: dict | None = None) -> str:
         job_id = str(uuid.uuid4())
         with self._locked():
             self._append({"event": "start", "job_id": job_id, "stage": stage,
-                          "ensemble_id": ensemble_id, "pid": os.getpid()})
+                          "ensemble_id": ensemble_id, "pid": os.getpid(), "details": details or {}})
         return job_id
 
     def finish(self, job_id: str, elapsed_seconds: float, history_evaluations: int,
@@ -62,6 +62,10 @@ class ResourceLedger:
                 raise ValueError("Job already finished")
             if not any(r["job_id"] == job_id and r["event"] == "start" for r in records):
                 raise ValueError("Unknown job ID")
+            progress = [r for r in records if r["job_id"] == job_id and r["event"] == "progress"]
+            if progress and (elapsed_seconds < progress[-1]["elapsed_seconds"]
+                             or history_evaluations < progress[-1]["history_evaluations"]):
+                raise ValueError("Final cumulative usage cannot decrease")
             self._append({"event": "finish", "job_id": job_id, "elapsed_seconds": elapsed_seconds,
                           "history_evaluations": history_evaluations, "download_bytes": download_bytes,
                           "status": status, "details": details or {}})
@@ -71,12 +75,30 @@ class ResourceLedger:
         finished = {r["job_id"] for r in records if r["event"] == "finish"}
         return [r for r in records if r["event"] == "start" and r["job_id"] not in finished]
 
+    def progress(self, job_id: str, elapsed_seconds: float, history_evaluations: int,
+                 *, details: dict | None = None) -> None:
+        if (not math.isfinite(elapsed_seconds) or elapsed_seconds < 0
+                or not isinstance(history_evaluations, int) or history_evaluations < 0):
+            raise ValueError("Invalid cumulative progress")
+        with self._locked():
+            previous = [r for r in self.records() if r["job_id"] == job_id]
+            if not previous or any(r["event"] == "finish" for r in previous):
+                raise ValueError("Job absent or already finished")
+            last = previous[-1]
+            if elapsed_seconds < last.get("elapsed_seconds", 0) or history_evaluations < last.get("history_evaluations", 0):
+                raise ValueError("Cumulative progress cannot decrease")
+            self._append({"event": "progress", "job_id": job_id, "elapsed_seconds": elapsed_seconds,
+                          "history_evaluations": history_evaluations, "details": details or {}})
+
     def usage(self) -> dict:
         totals = {"elapsed_seconds": 0.0, "history_evaluations": 0, "download_bytes": 0}
+        latest = {}
         for record in self.records():
-            if record["event"] in {"finish", "import"}:
-                for key in totals:
-                    totals[key] += record.get(key, 0)
+            if record["event"] in {"progress", "finish", "import"}:
+                latest[record["job_id"]] = record
+        for record in latest.values():
+            for key in totals:
+                totals[key] += record.get(key, 0)
         return totals
 
     def import_bootstrap(self, path: Path) -> int:

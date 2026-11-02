@@ -253,3 +253,216 @@ def pilot(protocol, catalog, schedule, ledger, *, n_histories=1024) -> PilotResu
         raise
     ledger.finish(job, time.perf_counter() - start, work, details={"evidence_id": evidence_id})
     return result
+
+
+def build_matrix(protocol, schedule):
+    cells = []
+    def add(model, kind, k, emission, detector, *, robust=False):
+        zero = detector == "Duncal_zero"
+        invisible = emission == "E0" or zero
+        unconstrained = detector == "Duncal"
+        bounded = not invisible and not unconstrained and (schedule.schedule_grade == "coarsened_F1" or detector == "Dpositive" or robust)
+        cid = f"{kind}:m{model.model_id}:k{k:g}:{emission}:{detector}" + (":robust" if robust else "")
+        baseline = f"{kind if kind != 'ideal_silence' else 'interacting'}:m{model.model_id}:k{k:g}"
+        families = [f"{kind}/{emission}/{detector}/k{k:g}" + ("/robust" if robust else "")]
+        if model.model_id < 16:
+            families.append(f"{kind}/all_civilizations/k{k:g}")
+            if emission == "E1" and detector == "Dnom" and k == 1 and not robust:
+                families.append(f"{kind}/primary")
+            if emission != "E0" and detector in ("Dnom", "Dweak", "Dhigh", "Dpositive"):
+                families.append(f"{kind}/positive_detectors/{emission}/k{k:g}")
+            if unconstrained or zero:
+                families.append(f"{kind}/unconstrained_detector/{emission}/k{k:g}")
+        ids = {}
+        if kind != "independent_sites":
+            ids["R0"] = baseline + ":R0"
+            if not invisible and not unconstrained:
+                # Likelihood is entirely past data, shared by future replays.
+                past = f"{kind}:m{model.model_id}:{emission}:{detector}" + (":robust" if robust else "")
+                if bounded:
+                    for q in ("null_low", "null_high"):
+                        ids[q] = past + ":" + q
+                    for q in ("J_low", "J_high", "K_low", "K_high"):
+                        ids[q] = cid + ":" + q
+                else:
+                    ids.update(likelihood=past + ":likelihood", R=cid + ":R")
+        row = {"cell_id": cid, "model_id": model.model_id, "model_kind": kind, "baseline_id": baseline,
+               "emission_id": emission, "detector_id": detector, "future_multiplier": float(k),
+               "families": families, "interval_ids": ids, "bounded_weights": bounded,
+               "thresholds": list(protocol.thresholds), "schedule_grade": schedule.schedule_grade,
+               "detector_grade": schedule.detector_grade, "visit_dependence": "robust" if robust else "nominal",
+               "analytic_unit_weight": invisible, "analytic_unconstrained_detector": unconstrained,
+               "dependence_robust_by_F1": schedule.schedule_grade == "coarsened_F1"}
+        if model.speed_id in ("S3", "S4") and kind != "independent_sites":
+            row["survival_interval_id"] = f"C:m{model.model_id}"
+        cells.append(row)
+    detectors = [d.detector_id for d in protocol.detectors]
+    for model in protocol.models:
+        for kind in ("interacting", "independent_sites"):
+            if model.model_id >= 16:
+                for detector in ("Dnom", "Dweak", "Dhigh"):
+                    add(model, kind, 1., "E1", detector)
+                continue
+            for emission in protocol.emissions:
+                if emission.emission_id == "E0":
+                    add(model, kind, 1., "E0", "Dnone")
+                else:
+                    for detector in detectors:
+                        add(model, kind, 1., emission.emission_id, detector)
+                    add(model, kind, 1., emission.emission_id, "Duncal_zero")
+                    if schedule.schedule_grade == "exact":
+                        for detector in ("Dnom", "Dweak", "Dhigh", "Dpositive"):
+                            add(model, kind, 1., emission.emission_id, detector, robust=True)
+            for k in (0., 10.):
+                add(model, kind, k, "E0", "Dnone")
+                for detector in detectors + ["Duncal_zero"]:
+                    add(model, kind, k, "E1", detector)
+        if model.model_id < 16:
+            for k in (0., 1., 10.):
+                cid = f"ideal_silence:m{model.model_id}:k{k:g}"
+                row = {"cell_id": cid, "model_id": model.model_id, "model_kind": "ideal_silence",
+                       "baseline_id": f"interacting:m{model.model_id}:k{k:g}", "future_multiplier": k,
+                       "emission_id": "E1", "detector_id": "perfect", "ideal_reference": True,
+                       "families": [f"ideal_silence/k{k:g}"], "thresholds": list(protocol.thresholds),
+                       "schedule_grade": "ideal_simultaneous", "detector_grade": "perfect_assumption",
+                       "interval_ids": {"R0": f"interacting:m{model.model_id}:k{k:g}:R0", "R": cid + ":R"}}
+                if model.speed_id in ("S3", "S4"):
+                    row["survival_interval_id"] = f"C:m{model.model_id}"
+                cells.append(row)
+    return tuple(cells)
+
+
+def build_bound_registry(cells):
+    items = {}
+    for cell in cells:
+        primary = (cell["model_kind"] == "interacting" and cell["model_id"] < 16
+                   and cell["emission_id"] == "E1" and cell["detector_id"] == "Dnom"
+                   and cell["future_multiplier"] == 1 and cell.get("visit_dependence") == "nominal")
+        for quantity, identifier in cell["interval_ids"].items():
+            pool = "primary" if primary else "diagnostics"
+            if identifier in items and items[identifier]["pool"] == "primary":
+                pool = "primary"
+            items[identifier] = {"pool": pool, "quantity": quantity}
+        if "survival_interval_id" in cell:
+            items[cell["survival_interval_id"]] = {"pool": "diagnostics", "quantity": "acceptance"}
+    return {"items": items, "pools": {name: {"A": .025, "M": sum(i["pool"] == name for i in items.values())}
+                                       for name in ("primary", "diagnostics")},
+            "checkpoint_rule": "A/(M*j*(j+1))", "thresholds_reuse_intervals": True}
+
+
+def execution_identity():
+    import hashlib
+    import importlib.metadata
+    import platform
+    names = ("contracts.py", "model.py", "detection.py", "oracles.py", "theorem.py", "inference.py",
+             "experiments.py", "storage.py", "resources.py", "artifacts.py", "runner.py")
+    return {"python": platform.python_version(), "architecture": platform.machine(),
+            "packages": {name: importlib.metadata.version(name) for name in ("numpy", "scipy", "matplotlib", "mpmath")},
+            "code_hashes": {name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
+                            for name in names if (Path(__file__).parent / name).is_file()}}
+
+
+def _scientific_grid(protocol):
+    expected = [(mu, 10000, speed) for mu in (.1, 1., 3., 12.) for speed in ("S1", "S2", "S3", "S4")]
+    expected += [(3., age, speed) for age in (1000, 100000) for speed in ("S1", "S4")]
+    actual = [(m.mu, m.age_years, m.speed_id) for m in protocol.models]
+    if actual != expected or [m.model_id for m in protocol.models] != list(range(20)) or any(m.future_multiplier != 1 for m in protocol.models):
+        raise ValueError("Changed scientific grid requires an explicit deviation and fresh confirmation")
+    expected_emissions = [("E0", 0, 0, None, "always"), ("E1", 1, 0, None, "always"),
+                          ("E2", .1, 0, None, "always"), ("E3", 1, 100, None, "always"),
+                          ("E4", 1, 0, 100, "always"), ("E5", 1, 0, None, "ctmc")]
+    if [(e.emission_id, e.zeta, e.delay_years, e.lifetime_years, e.activity) for e in protocol.emissions] != expected_emissions:
+        raise ValueError("Changed scientific grid: emission family")
+    expected_detectors = [("Dnom", .8836, .8836, False), ("Dweak", .44, .44, False),
+                          ("Dhigh", .94, .94, False), ("Dpositive", .44, .94, False), ("Duncal", 0, 1, True)]
+    if [(d.detector_id, d.pair_low, d.pair_high, d.allow_partial) for d in protocol.detectors] != expected_detectors:
+        raise ValueError("Changed scientific grid: detector family")
+    if (protocol.thresholds != (.01, .05, .1) or protocol.future_multipliers != (0, 1, 10)
+            or protocol.horizon_years != 100 or protocol.error_pools != {"primary": .025, "diagnostics": .025}
+            or protocol.seed_roots != {"development": [20261101, 0], "confirmation": [20261101, 1]}
+            or any(e.on_fraction != .1 or e.corr_days != 1 for e in protocol.emissions)):
+        raise ValueError("Changed scientific grid or uncertainty policy")
+
+
+def freeze_protocol(protocol, catalog, schedule, calibration, pilot, output_dir):
+    import hashlib
+    from .artifacts import read_json_checked
+    from .data import validate_schedule
+    from .model import survival_constant
+    from .oracles import ideal_silence_probability
+    if protocol.purpose == "research":
+        _scientific_grid(protocol)
+        if calibration is None or pilot is None or not pilot.passed or not calibration.evidence_ids or not pilot.evidence_ids:
+            raise ValueError("Missing correctness/precision-policy evidence")
+        identity = _identity(protocol, catalog, schedule)
+        if calibration.timings.get("identity") != identity or pilot.diagnostics.get("identity") != identity:
+            raise ValueError("Stale calibration/pilot evidence identity")
+        correctness = read_json_checked(Path("results/correctness.json"))
+        if correctness.get("status") != "passed" or any(not Path(p).is_file() or hashlib.sha256(Path(p).read_bytes()).hexdigest() != sha
+                                                         for p, sha in correctness.get("component_hashes", {}).items()):
+            raise ValueError("Stale correctness evidence")
+        if not correctness.get("component_hashes"):
+            raise ValueError("Missing correctness evidence")
+        if catalog.provenance["source_status"] != "source_verified" or len(catalog.geometry.site_ids) != 61 or len(catalog.source_rows) != 62:
+            raise ValueError("Missing verified complete catalog")
+        if schedule.schedule_grade == "unavailable":
+            raise ValueError("Missing schedule information")
+        if schedule.schedule_grade == "exact":
+            validate_schedule(schedule, catalog, schedule.provenance | {"kind": "observing_log"})
+            if schedule.provenance.get("source_status") == "synthetic_control":
+                raise ValueError("Synthetic schedule cannot certify research")
+    if calibration is None or pilot is None:
+        raise ValueError("Missing execution evidence")
+    for name, expected_hash in protocol.source_hashes.items():
+        if not Path(name).is_file() or hashlib.sha256(Path(name).read_bytes()).hexdigest() != expected_hash:
+            raise ValueError("Source hash mismatch")
+    cells = build_matrix(protocol, schedule)
+    registry = build_bound_registry(cells)
+    root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    g = catalog.geometry
+    body = {"schema_version": 1, "purpose": protocol.purpose, "config": asdict(protocol),
+            "thresholds": list(protocol.thresholds), "cells": list(cells), "bound_registry": registry,
+            "matrix_sha256": canonical_hash({"cells": cells}), "registry_sha256": canonical_hash(registry),
+            "execution_identity": execution_identity(), "catalog_provenance": catalog.provenance,
+            "geometry": {"site_ids": g.site_ids, "xyz_ly": g.xyz_ly.tolist(), "radii_ly": g.radii_ly.tolist(), "distances_ly": g.distances_ly.tolist()},
+            "schedule": asdict(schedule), "calibration_evidence": calibration.evidence_ids, "pilot_evidence": pilot.evidence_ids,
+            "initial_survivors": {str(k): v for k, v in calibration.initial_survivors.items()},
+            "initial_diagnostic_proposals": {str(k): v for k, v in calibration.initial_diagnostic_proposals.items()},
+            "initial_ideal_survivors": protocol.initial_checkpoints["ideal_survivors"],
+            "logical_batch_size": calibration.logical_batch_size,
+            "survival_constants": {str(m.model_id): survival_constant(m, g) for m in protocol.models},
+            "ideal_silence_probabilities": {str(m.model_id): ideal_silence_probability(m, g) for m in protocol.models if m.model_id < 16},
+            "precision_policy": {"cumulative_multiplier": 2, "statistical_interval_width": .01,
+                                 "compatibility_error_width": .005, "alpha_rule": "A/(M*j*(j+1))"},
+            "rng": {"bit_generator": "PCG64", "root": [20261101, 1],
+                    "stages": {"interacting": 4, "diagnostic": 5, "ideal": 6},
+                    "purposes": {"prefix": 10, "future": 20, "audit": 30, "diagnostic": 40, "ideal": 50},
+                    "identity": "[20261101,phase,stage_id,model_id,purpose_id,batch_id]"}}
+    lock = body | {"protocol_hash": canonical_hash(body)}
+    for path, value in ((root / "matrix.json", {"cells": cells}), (root / "bound_registry.json", registry), (root / "protocol.lock.json", lock)):
+        if path.exists() and canonical_hash(read_json_checked(path)) != canonical_hash(value):
+            raise ValueError("Immutable freeze conflict; preserve previous experiment")
+        if not path.exists():
+            write_json_atomic(path, value)
+    return lock | {"_output_dir": str(root.resolve())}
+
+
+def verify_protocol_lock(lock):
+    from .artifacts import read_json_checked
+    body = {k: v for k, v in lock.items() if k != "protocol_hash" and not k.startswith("_")}
+    if canonical_hash(body) != lock["protocol_hash"]:
+        raise ValueError("Protocol hash mismatch")
+    if execution_identity() != lock["execution_identity"]:
+        raise ValueError("Execution identity changed; resume rejected")
+    root = Path(lock.get("_output_dir", "results"))
+    matrix = read_json_checked(root / "matrix.json", lock["matrix_sha256"])
+    registry = read_json_checked(root / "bound_registry.json", lock["registry_sha256"])
+    if canonical_hash(matrix["cells"]) != canonical_hash(lock["cells"]) or registry != lock["bound_registry"]:
+        raise ValueError("Frozen matrix/registry mismatch")
+    return True
+
+
+def run_confirmation(protocol_lock, resume, ledger):
+    from .runner import run_confirmation as run
+    return run(protocol_lock, resume, ledger)

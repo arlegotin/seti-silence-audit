@@ -163,9 +163,22 @@ def summarize(counts_by_cell: dict[str, AuditCounts], protocol_lock: dict,
             row["completion_status"] = "pending"
             if n is not None and n.histories:
                 ids = cell["interval_ids"]
-                bounds["R0"] = interval(ids["R0"], n.arrivals, n.histories)
-                points["R0"], statuses["R0"] = n.arrivals / n.histories, "estimated"
-                if n.bound_counts:
+                original = counts_by_cell.get(cell["baseline_counts_id"]) if "baseline_counts_id" in cell else n
+                if original is not None and original.histories:
+                    bounds["R0"] = interval(ids["R0"], original.arrivals, original.histories)
+                    points["R0"], statuses["R0"] = original.arrivals / original.histories, "estimated"
+                if cell.get("ideal_reference"):
+                    bounds["R"] = interval(ids["R"], n.arrivals, n.histories)
+                    points["R"], statuses["R"] = n.arrivals / n.histories, "ideal_silence_conditional"
+                    silence = cell["ideal_silence_probability"]
+                    c = bounds["C"]
+                    bounds["likelihood"] = WeightBounds(min(1., silence / c.high) if c.high else 0.,
+                                                        min(1., silence / c.low) if c.low else 1.)
+                    points["likelihood"] = silence / points["C"] if points["C"] else None
+                    statuses["likelihood"] = "analytic_silence_over_survival"
+                elif cell.get("analytic_unconstrained_detector"):
+                    statuses["likelihood"] = statuses["R"] = "unconstrained_detector_outer"
+                elif n.bound_counts:
                     parts = {q: interval(ids[q], k, n.histories) for q, k in n.bound_counts.items()}
                     bounds["likelihood"] = WeightBounds(parts["null_low"].low, parts["null_high"].high)
                     bounds["R"] = partition_risk(parts["J_low"], parts["J_high"], parts["K_low"], parts["K_high"])

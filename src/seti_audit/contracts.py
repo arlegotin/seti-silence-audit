@@ -77,6 +77,7 @@ class Protocol:
     error_pools: dict[str, float]
     tolerances: dict[str, float]
     source_hashes: dict[str, str]
+    purpose: str = "research"
 
 
 @dataclass(frozen=True)
@@ -363,8 +364,14 @@ class PilotResult:
 
 def load_protocol(path: Path) -> Protocol:
     raw = read_json_checked(path)
+    return parse_protocol(raw)
+
+
+def parse_protocol(raw: dict) -> Protocol:
     if raw.get("schema_version") != 1:
         raise ValueError("Unsupported protocol schema_version")
+    if raw.get("purpose", "research") not in {"research", "smoke"}:
+        raise ValueError("Unknown protocol purpose")
     models = tuple(ModelConfig(**value) for value in raw["models"])
     emissions = tuple(EmissionConfig(**value) for value in raw["emissions"])
     detectors = tuple(DetectorConfig(**value) for value in raw["detectors"])
@@ -391,4 +398,5 @@ def load_protocol(path: Path) -> Protocol:
         initial_checkpoints=raw["initial_checkpoints"], extension_policy=raw["extension_policy"],
         seed_roots=raw["seed_roots"], error_pools=raw["error_pools"],
         tolerances=raw["tolerances"], source_hashes=raw["source_hashes"],
+        purpose=raw.get("purpose", "research"),
     )
