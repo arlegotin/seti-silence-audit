@@ -1,0 +1,7 @@
+{
+  "evidence_label": "Synthetic correctness control",
+  "positions_ly": [10, 20, 30],
+  "birth_support_years": [-200, -50, 0, null],
+  "speed_support": [0.1, 0.5],
+  "prior": "Independent uniform finite supports; not the continuous scientific model"
+}

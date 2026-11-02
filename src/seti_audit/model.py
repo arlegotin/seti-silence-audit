@@ -4,7 +4,7 @@ import math
 
 import numpy as np
 
-from .contracts import FirstClocks, FloatArray, Geometry, History, ModelConfig
+from .contracts import FirstClocks, FloatArray, FutureMarks, Geometry, History, ModelConfig
 
 
 def _uniform_open(rng, size: int) -> tuple[FloatArray, int]:
@@ -48,7 +48,7 @@ def sample_speed_marks(config: ModelConfig, rng, size: int) -> tuple[FloatArray,
         v[rounded] = np.nextafter(1.0, 0.0)
         diagnostics["speed_rounding_count"] = int(np.sum(rounded))
         # The affected uniform-q region is contained in (0,2^-53).
-        diagnostics["speed_rounding_mass_bound"] = float(np.sum(fast)) * 2**-53 * (
+        diagnostics["speed_rounding_mass_bound"] = float(size) * 2**-53 * (
             .001 if config.speed_id == "S3" else 1)
     return v, q, diagnostics
 
@@ -88,14 +88,90 @@ def invert_hazard(hazards: FloatArray, config: ModelConfig, n_sites: int,
 
 def sample_first_clocks(config: ModelConfig, geometry: Geometry, rng,
                         conditioning: str = "unconditional", horizon_years: float = 100) -> FirstClocks:
-    if conditioning != "unconditional":
-        raise ValueError(f"Unsupported conditioning: {conditioning}")
     n = len(geometry.site_ids)
     uniforms, rejected = _uniform_open(rng, n)
-    births = invert_hazard(-np.log(uniforms), config, n, horizon_years)
+    hazard = -np.log(uniforms)
+    if conditioning in {"lower_cone", "ideal_silence"}:
+        inverse_speed = _floor_inverse_speed(config) if conditioning == "lower_cone" else 1.0
+        origin = np.maximum(-config.age_years, -geometry.radii_ly * inverse_speed)
+        hazard += cumulative_hazard(origin, config, n)
+    elif conditioning != "unconditional":
+        raise ValueError(f"Unsupported conditioning: {conditioning}")
+    births = invert_hazard(hazard, config, n, horizon_years)
     speeds, gaps, diagnostics = sample_speed_marks(config, rng, n)
     diagnostics["open_uniform_rejections"] += rejected
+    diagnostics["conditioning"] = conditioning
     return FirstClocks(births, speeds, gaps, diagnostics)
+
+
+def _floor_inverse_speed(config: ModelConfig) -> float:
+    return 10.0 if config.speed_id in {"S1", "S3"} else 2.0
+
+
+def survival_constant(config: ModelConfig, geometry: Geometry) -> float:
+    origin = np.maximum(-config.age_years, -geometry.radii_ly * _floor_inverse_speed(config))
+    return math.exp(-float(np.sum(cumulative_hazard(origin, config, len(geometry.site_ids)))))
+
+
+def sample_surviving_prefix(config: ModelConfig, geometry: Geometry, rng) -> tuple[History, int]:
+    """Pure scalar reference; the batch owner logs returned proposal counts."""
+    attempts = 0
+    while True:
+        clocks = sample_first_clocks(config, geometry, rng, "lower_cone", horizon_years=0)
+        history = simulate_history(clocks, geometry)
+        attempts += 1
+        if history.survives:
+            return history, attempts
+        if config.speed_id in {"S1", "S2"}:
+            raise ArithmeticError("A common-speed lower-cone proposal violated exact survival")
+
+
+def survival_diagnostic(config: ModelConfig, geometry: Geometry, rng,
+                         n_proposals: int = 50000) -> tuple[int, int, float]:
+    if not isinstance(n_proposals, int) or n_proposals <= 0:
+        raise ValueError("A proposal-count diagnostic needs a positive predetermined sample size")
+    accepted = 0
+    for _ in range(n_proposals):
+        clocks = sample_first_clocks(config, geometry, rng, "lower_cone", horizon_years=0)
+        accepted += int(simulate_history(clocks, geometry).survives)
+    return accepted, n_proposals, survival_constant(config, geometry)
+
+
+def sample_future_marks(prefix: History, config: ModelConfig, rng) -> FutureMarks:
+    if np.any(np.isfinite(prefix.birth_years) & (prefix.birth_years > 0)):
+        raise ValueError("Future marks require a pre-zero prefix")
+    eligible = np.isposinf(prefix.birth_years)
+    count = int(np.sum(eligible))
+    residual = np.full(prefix.birth_years.shape, np.inf)
+    uniforms, rejected = _uniform_open(rng, count)
+    residual[eligible] = -np.log(uniforms)
+    speeds, gaps = prefix.speeds.copy(), prefix.speed_gaps.copy()
+    speeds[eligible], gaps[eligible], diagnostics = sample_speed_marks(config, rng, count)
+    diagnostics["open_uniform_rejections"] += rejected
+    return FutureMarks(residual, speeds, gaps, diagnostics)
+
+
+def replay_future(prefix: History, config: ModelConfig, geometry: Geometry,
+                   marks: FutureMarks, k: float) -> History:
+    if not math.isfinite(k) or k < 0:
+        raise ValueError("Future rate multiplier must be finite and nonnegative")
+    if (np.any(np.isfinite(prefix.birth_years) & (prefix.birth_years > 0))
+            or not prefix.survives):
+        raise ValueError("Future replay requires a surviving pre-zero prefix")
+    if len(marks.residual_hazards) != len(geometry.site_ids):
+        raise ValueError("Future marks and geometry have different site counts")
+    births, speeds, gaps = prefix.birth_years.copy(), prefix.speeds.copy(), prefix.speed_gaps.copy()
+    eligible = np.isposinf(births)
+    births[eligible] = np.inf
+    n = len(geometry.site_ids)
+    rate = config.mu / (n * config.age_years) if n else 0.0
+    if k > 0 and rate > 0:
+        births[eligible] = marks.residual_hazards[eligible] / (k * rate)
+        births[births > 100] = np.inf
+    speeds[eligible], gaps[eligible] = marks.speeds[eligible], marks.speed_gaps[eligible]
+    diagnostics = prefix.diagnostics | {"future_multiplier": float(k),
+                                        "future_mark_diagnostics": marks.diagnostics}
+    return simulate_history(FirstClocks(births, speeds, gaps, diagnostics), geometry)
 
 
 def _flag_tolerance(*times: float) -> float:

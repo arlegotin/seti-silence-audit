@@ -198,6 +198,26 @@ class History:
         return bool(self.diagnostics.get("arrives_within_horizon", 0 < self.arrival_year <= 100))
 
 
+@dataclass(frozen=True)
+class FutureMarks:
+    residual_hazards: FloatArray
+    speeds: FloatArray
+    speed_gaps: FloatArray
+    diagnostics: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        residual = np.array(self.residual_hazards, dtype=np.float64, copy=True)
+        if residual.ndim != 1 or np.any(np.isnan(residual) | (residual <= 0)):
+            raise ValueError("Future hazards must be positive or infinity for an ineligible site")
+        checked = FirstClocks(np.full(residual.shape, np.inf), self.speeds, self.speed_gaps)
+        if checked.speeds.shape != residual.shape:
+            raise ValueError("Future-mark shape mismatch")
+        residual.setflags(write=False)
+        object.__setattr__(self, "residual_hazards", residual)
+        object.__setattr__(self, "speeds", checked.speeds)
+        object.__setattr__(self, "speed_gaps", checked.speed_gaps)
+
+
 def load_protocol(path: Path) -> Protocol:
     raw = read_json_checked(path)
     if raw.get("schema_version") != 1:

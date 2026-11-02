@@ -128,3 +128,21 @@ def test_clock_generation_recovers_exponential_first_attempt_distribution(tiny_g
     times = np.array([sample_first_clocks(config, geometry, rng).birth_years[0] for _ in range(3000)])
     # P(first birth <= -5) = 1-exp(-.5), independently derived.
     assert abs(np.mean(times <= -5) - 0.3934693402873666) < .04
+
+
+def test_mixed_speed_rounding_bound_covers_all_candidate_marks(tiny_geometry):
+    from seti_audit.contracts import ModelConfig
+    from seti_audit.model import sample_first_clocks
+
+    class FixedDraws:
+        def __init__(self):
+            self.values = iter([np.full(4, .5), np.array([.0001, .2, .4, .8]),
+                                np.array([np.nextafter(0., 1.)])])
+
+        def random(self, size):
+            return next(self.values)
+
+    draw = sample_first_clocks(ModelConfig(0, 12, 10000, "S3"),
+                                tiny_geometry([[r, 0, 0] for r in (1, 2, 3, 4)]), FixedDraws())
+    assert draw.diagnostics["speed_rounding_count"] == 1
+    assert draw.diagnostics["speed_rounding_mass_bound"] == 4 * .001 * 2**-53
