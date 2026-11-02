@@ -1,6 +1,6 @@
 # SETI silence audit: research and software specification
 
-Date: 2026-11-02. Status: builder checked; proposed design awaiting user review.
+Date: 2026-11-02. Status: builder checked; approved by the user on 2026-11-02.
 
 ## 1. Intent and authority
 
