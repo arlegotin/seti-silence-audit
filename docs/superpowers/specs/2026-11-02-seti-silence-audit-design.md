@@ -1,18 +1,18 @@
 # SETI silence audit: research and software specification
 
-Date: 2026-11-02. Status: builder checked; approved by the user on 2026-11-02.
+Date: 2026-11-02. Status: initial design builder checked and approved; amended on 2026-11-02 under the user’s instruction to prioritize substantive results and remove artificial execution caps.
 
 ## 1. Intent and authority
 
-Build the reproducible finite-target research audit described in [the blueprint](../../blueprint.md), answering whether the UCLA 2020–2023 radio null materially narrows century-arrival probabilities within its declared model families. The audience is a researcher inspecting the assumptions and an engineer reproducing the calculation. A verified information limit, certified negative result, or justified early stop is a useful outcome.
+Build the reproducible finite-target research audit described in [the blueprint](../../blueprint.md), answering whether the UCLA 2020–2023 radio null materially narrows century-arrival probabilities within its declared model families. The audience is a researcher inspecting the assumptions and an engineer reproducing the calculation. A verified information limit or certified negative result is a useful outcome. Complete the required comparisons, robustness work, and validation; an elapsed duration or arbitrary workload count never completes the project.
 
 This specification makes the blueprint implementable; it does not replace its scientific protocol. The blueprint remains normative for equations, source references R1–R14, the target transcription, acquisition hashes, and the experiment matrix. Any apparent conflict must be recorded and resolved before confirmation; never silently choose the more favorable interpretation.
 
-The supplied sources are committed unchanged:
+The PDF remains unchanged. The blueprint was revised on 2026-11-02 to remove artificial execution caps; its current content hash is recorded below. The original inputs remain recoverable from commit `6a556dc`.
 
 | Source | SHA-256 | Use |
 |---|---|---|
-| `docs/blueprint.md` | `9b30662e1d83bcf691b4322f7a7003ad618fb545d699ae818491758925c89307` | Research requirements and inherited source-audit claims |
+| `docs/blueprint.md` | `b1b7db71cb41c69f6f508a3010b11ae5fc1168adcc8ae9bbb646008d1daaa211` | Research requirements and inherited source-audit claims |
 | `docs/silence_contact_theorem.pdf` | `2a6c071a3edfc6ff3dc5db07ac4c94448537f907e9e22051f9397b49374839fe` | Mathematical reference; 14 pages |
 
 For this design, the PDF was read through text extraction and page 8 was visually inspected. Its warning display is visibly incomplete. The repair in blueprint §3.3 is an independent derivation, not recovered source text. The source's claimed computation scripts are absent. Previous planning probes and literature inspections remain attributed to the blueprint; they are not results reproduced in this checkout. External source/data verification belongs to acquisition, not this documentation task.
@@ -25,7 +25,7 @@ Required goals:
 - Preserve chronological birth suppression, shared physical sources across visits, and the survey's two-ON selection requirement.
 - Compare interacting histories with deterministic independent-site quadrature and same-star ideal silence.
 - Produce conservative numerical intervals and retain every unresolved model in outer envelopes.
-- Run within the blueprint's laptop budgets, with deterministic resume and a report reproducible from saved aggregates.
+- Complete the research with measured resource use, deterministic resume, and a report reproducible from saved aggregates; improve execution methods and precision as needed.
 
 Excluded scope: Galactic forecasting, empirical priors on extraterrestrial behavior, anthropic sampling, front collisions or extinction, additional field stars, raw-voltage processing, arbitrary-signal calibration, a dashboard, databases, cloud compute, and historical priority claims. A smaller catalog or favorable grid chosen after seeing risks is unacceptable. So are synthetic data presented as observations, weighted counts presented as binomial trials, and a timeout presented as a negative result.
 
@@ -33,7 +33,7 @@ Approaches considered:
 
 | Approach | Tradeoff | Disposition |
 |---|---|---|
-| One package, shared histories, staged evidence gates | Requires explicit contracts for conditioning and data grades; avoids duplicated scientific logic | Proposed: directly implements the fixed blueprint |
+| One package, shared histories, staged evidence gates | Requires explicit contracts for conditioning and data grades; avoids duplicated scientific logic | Selected: directly implements the fixed blueprint |
 | Independent theorem, simulator, and survey applications | Can develop separately, but duplicates conditioning, provenance, and numerical conventions | Keep mathematical code modular inside the package instead |
 | Smaller empirical grid first, expand later | Cheaper initial run; cannot answer the blueprint's prespecified envelope question | Use synthetic controls and cost calibration only; retain the scientific grid |
 
@@ -83,7 +83,7 @@ The complete parameter definitions in blueprint §§5 and 8.3 apply. Preserve st
 
 The primary comparison is E1/Dnom/age 10,000/`k=1` over 16 demographics. Evaluate E2–E5 and detector sensitivities on those histories. Continuation replays use E1 and analytic E0 only, with E1's three point detectors and interval bounds. Age diagnostics use E1, three point detectors, and matched independent-site controls. Same-star ideal silence uses the 16 primary demographics and all three continuations. These are one-factor sensitivities, not an unexecuted Cartesian robustness claim.
 
-Pre-enumerate and hash no more than 2,000 reporting cells before confirmation. A cell is a model/observation variant, with all three threshold statuses stored together; thresholds are not independent simulations. Tag model kind (`interacting`, `independent_sites`, `ideal_silence`) and named family membership. Do not invent more confirmatory combinations to fill the cap. E0/Duncal obstructions and `mu=0` are analytic controls.
+Pre-enumerate and hash the complete required reporting matrix before confirmation; there is no arbitrary reporting-cell quota. A cell is a model/observation variant, with all three threshold statuses stored together; thresholds are not independent simulations. Tag model kind (`interacting`, `independent_sites`, `ideal_silence`) and named family membership. Scientific additions require an explicit rationale and independent confirmation rather than outcome-driven grid changes. E0/Duncal obstructions and `mu=0` are analytic controls.
 
 ## 5. Input and observation contracts
 
@@ -95,7 +95,7 @@ Retain the canonical PDF at `docs/silence_contact_theorem.pdf`; record its hash 
 
 ### Schedule grades and acquisition
 
-Use the four published session dates and Dryad version 370211 specified in blueprint §2. Ordinary access allows at most two attempts per failed route. Stream candidate CSVs once, hashing original bytes and extracting unique observing metadata plus a small validation sample; never load the four-gigabyte archive into a dataframe. Verify both ON scans, pairing, chronology, duration, membership, repeated visits, and completeness including potentially absent zero-hit scans. A maximum candidate timestamp alone never establishes the exact endpoint.
+Use the four published session dates and Dryad version 370211 specified in blueprint §2. Retry transient failures with appropriate backoff, diagnose persistent failures, and inspect alternative ordinary public or already-authorized routes when useful. A retry count or elapsed acquisition time does not establish unavailability. Stream candidate CSVs once, hashing original bytes and extracting unique observing metadata plus a small validation sample; never load the four-gigabyte archive into a dataframe. Verify both ON scans, pairing, chronology, duration, membership, repeated visits, and completeness including potentially absent zero-hit scans. A maximum candidate timestamp alone never establishes the exact endpoint.
 
 Maintain separate status axes:
 
@@ -117,11 +117,11 @@ Permanent occupation makes each site's first attempted birth sufficient: whether
 
 Implement a scalar reference before batching. A compact history carries accepted indices, birth times, speeds and `q`, earliest accepted arrival, occupation times, censoring, and replay diagnostics. A flagged boundary comparison triggers higher-precision re-evaluation, never an altered inequality. The flag tolerance is `max(1e-12 yr,64*machine_epsilon*max(1 yr,abs(relevant times)))`. `A=100` is included; `A=0` violates survival. Store `q` and count/bound any rounding safeguard that could introduce `v=1`.
 
-Use the exact lower-support-speed cone proposal (§6.4), with `v_floor=.1` for S1/S3 and `.5` for S2/S4. Clock origins are `l_i=max(-age_years,-r_i/v_floor)`; invert `Lambda(l_i)+Exp(1)`, including the hazard offset. Filter only on accepted arrival. For common speeds, `C=C_star` exactly; mixed speeds need a separate fixed 50,000-proposal diagnostic and `C=C_star*acceptance_probability`. Never estimate `C` from the survivor-stopped sample with ordinary binomial intervals. Never restrict all candidates by their own marked hypothetical arrival.
+Use the exact lower-support-speed cone proposal (§6.4), with `v_floor=.1` for S1/S3 and `.5` for S2/S4. Clock origins are `l_i=max(-age_years,-r_i/v_floor)`; invert `Lambda(l_i)+Exp(1)`, including the hazard offset. Filter only on accepted arrival. For common speeds, `C=C_star` exactly; mixed speeds need a separate proposal-count diagnostic, initially 50,000 proposals with predeclared precision extensions, and `C=C_star*acceptance_probability`. Never estimate `C` from the survivor-stopped sample with ordinary binomial intervals. Never restrict all candidates by their own marked hypothetical arrival.
 
 Store unchanged pre-zero candidates, accepted fronts, and marks for future replays. Only sites with no attempted birth by zero receive a new residual exponential hazard; reuse it and its speed across `k=0,1,10`. Replay acceptance with the old fronts. Future changes must not alter `E`, `C`, or past likelihood.
 
-Batch only after pathwise equality with the scalar reference. NumPy rank-wise occupation updates avoid a `batch*n*n` tensor. Batch size may fall to respect memory; star count and binary64 precision may not. Optional compiled acceleration requires a measured obstruction, repair-budget accounting, and pathwise validation.
+Batch only after pathwise equality with the scalar reference. NumPy rank-wise occupation updates avoid a `batch*n*n` tensor. Batch size may fall to respect memory; star count and binary64 precision may not. Optional compiled acceleration requires a measured bottleneck, resource-use records, and pathwise validation. Improve or replace a sampler when needed, independently validating its estimator and uncertainty treatment.
 
 ### Linked selection likelihood
 
@@ -147,13 +147,13 @@ Implement the finite-age two-branch kernel and independently reconstructed warni
 
 Required checks: `d=3,T=c=1,lambda*nu3=1`, `alpha in {.5,1,2,3,4,6}`, `h in {1e-2,1e-4,1e-6,1e-8}`, and `1e-12` only with adequate arbitrary precision. Check direct radial integration, alpha 1/2 closed forms, `b'(h)=L(h,1)`, critical logarithmic convergence, a speed cutoff, and an atomic law. Ordinary-scale independent formulas agree relatively within `1e-9`; this is not a required convergence rate to an asymptotic limit.
 
-The bounded shell experiment uses only alpha 1, horizons `.02,.5`, and at most 10,000 histories each. Sample the positive-truncated Poisson directly and apply chronological suppression. Record arrivals outside the shell horizon as right-censored. Compare contact estimates to `b*exp(-s)<=p<=1-exp(-b)` and discrepancy `<=b*s`. Deterministic phantom cases must exercise rejection even if random runs see none. A defective reference theorem cannot validate the finite-site experiment, but does not by itself refute independently validated finite-site formulas.
+The finite-shell experiment initially uses alpha 1, horizons `.02,.5`, and 10,000 histories per horizon, extended at predeclared checkpoints as needed to validate the reference. These sample counts are initial precision choices, not ceilings. Sample the positive-truncated Poisson directly and apply chronological suppression. Record arrivals outside the shell horizon as right-censored. Compare contact estimates to `b*exp(-s)<=p<=1-exp(-b)` and discrepancy `<=b*s`. Deterministic phantom cases must exercise rejection even if random runs see none. A defective reference theorem cannot validate the finite-site experiment, but does not by itself refute independently validated finite-site formulas.
 
 ## 7. Statistical and numerical assurance
 
 One simulated universe is one independent unit. Save Rao–Blackwell weighted sums for point estimates and independent-per-history uniforms for integer Bernoulli audit counts. The same uniform may pair variants of that history. Compute exact Clopper–Pearson intervals from integer counts only; zero null histories gives risk `[0,1]`, and zero arrivals gives a positive upper bound unless analytically impossible.
 
-Allocate familywise Monte Carlo error `0.025` to the primary decision and `0.025` to required diagnostics/robustness. Before confirmation enumerate and hash the unique scalar bounds, assign each to one pool, and use Bonferroni within its fixed pool. Reuse shared bounds across thresholds without triple allocation. Report the pool sizes and per-bound error. Calibration uncertainty is separate from Monte Carlo error.
+Allocate familywise Monte Carlo error `0.025` to the primary decision and `0.025` to required diagnostics/robustness. Before confirmation enumerate and hash the unique scalar interval registry, assigning each item to one pool. For pool error `A`, `M` registry items, and checkpoint `j>=1`, allocate `alpha=A/(M*j*(j+1))` per item. Bonferroni over items and all checkpoints preserves the combined error at most `.05`, since `sum(1/(j*(j+1)), j>=1)=1`. Reuse shared intervals across thresholds without triple allocation. Report registry sizes, checkpoint indices, and per-checkpoint error. Calibration uncertainty is separate from Monte Carlo error.
 
 For interval weights save Bernoulli counts for `J-`, `J+`, `K-`, `K+` and lower/upper null means. Bound risk by `J-/(J-+K+)` through `J+/(J++K-)`, inserting confidence endpoints conservatively. Undefined ratios become conservative endpoints 0 or 1. These are outer bounds and need not be simultaneously attainable. Include numerical error before making compatibility or narrowing claims.
 
@@ -161,35 +161,35 @@ Independent quadrature initially targets absolute probability error `1e-8` and r
 
 Known-answer controls in blueprint §8.1 are release gates: zero births/dark emission, one-site clock, equal-speed pathwise equivalence, both deterministic fast-phantom cases, finite-support enumeration, lower-cone subset/sampling, linked duplicate visits, two-ON AND behavior, OFF-direction rejection, exact silence, cutoff gap, positive/sign-reversal updating, interval-nuisance coverage, and zero-count uncertainty.
 
-## 8. Reproducibility, budgets, and failure behavior
+## 8. Reproducibility, resource use, and completion
 
 The following exact global constraints apply to the implementation and plan:
 
+- Primary goal: complete the required research, robustness comparisons, and validation; no artificial elapsed-time, acquisition, workload, launch, repair, or reporting-cell caps.
 - Use CPU binary64; no MPS/float32 substitution, cloud compute, CUDA, or paid services.
-- Local experimental compute and result generation: 6 wall-clock hours, including tests, failed runs, compilation, repairs, and optional acceleration; sum concurrent job durations.
-- Network/data acquisition: 60 minutes elapsed and 5.0 GB downloaded, including metadata and ordinary source documents.
-- Peak process RSS: `min(8 GiB,0.25*physical RAM)`; total project disk: 8 GiB with at least 4 GiB free beyond the planned footprint; generated results/checkpoints: 1 GiB.
-- Candidate universes/history evaluations: 60 million globally; mixed-speed demographic setting: 12 million attempts, also subject to the global cap; charge diagnostics and future replays.
-- Survivor targets: 100,000 primary, cost-only fallback 25,000; age diagnostics 25,000 each; ideal silence 25,000 per primary demographic; shell references 20,000 total.
-- At most 30 development/calibration/pilot launches; 20 interacting plus 16 ideal-silence confirmatory ensembles; at most 2,000 pre-enumerated reporting cells.
-- Repair allowance: 30 minutes compute, at most two targeted repairs per failed gate, included in the 6 hours; reserve the last 35 minutes for reporting.
+- Record elapsed time, RSS, disk use, downloads, evaluated histories, failures, repairs, and replays for reproducibility and optimization; resource accounting does not impose a stop quota.
+- Adapt batching, streaming, compression, and checkpointing to actual available memory and storage; a demonstrated physical resource obstacle requires measured requirements, attempted remedies, and continued unaffected work.
+- The scientific matrix has 20 interacting demographic settings and 16 ideal-silence reference settings; precision extensions and reruns for repairs do not change the declared scientific family.
+- Initial precision checkpoints: 100,000 primary survivors; 25,000 per age/ideal-silence setting; 50,000 proposals per mixed-speed diagnostic; 10,000 shell histories per reference horizon. These are starting plans, not sample ceilings or grounds for a cost-only precision downgrade.
+- Predeclare cumulative sample checkpoints `n_j=n_1*2**(j-1)` and interval error `alpha=A/(M*j*(j+1))` for registry item/checkpoint pairs; continue validated precision work when the claim remains computationally unresolved.
 - Development seeds: `SeedSequence([20261101,0,...])`; confirmation seeds: `SeedSequence([20261101,1,...])`; stable integer IDs, recorded generator and NumPy version.
-- Scientific grid, effect thresholds, sample-size choice, error allocation, data hashes/grades, attempt caps, seeds, tolerances, and stopping rules are immutable after protocol freeze; a scientific deviation needs a dated entry and fresh evidence within the remaining budget or is exploratory.
+- Freeze scientific families, effect thresholds, source/data grades and hashes, initial checkpoint sizes, extension sequence, interval registry/error allocation, seeds, and numerical tolerances before confirmation; ordinary precision extensions preserve the lock, while scientific changes need a dated deviation and fresh independent evidence.
+- A checkpoint/resume interruption leaves work pending; it never establishes completion, incompatibility, a negative result, or infeasibility. An analytic proof resolves only the claims it actually proves.
 
 Inspect actual hardware and native Python at execution time. Target Python 3.12 or newer with NumPy, SciPy, Matplotlib, pytest, and mpmath; verify installed APIs/imports and freeze working versions rather than claiming availability now. Use standard-library argparse, CSV, JSON, urllib, hashing, datetime, and pathlib for orchestration and data.
 
-Gates and local allocations are G0 input/analytic feasibility 10 minutes; G1 tiny correctness 20; G2 resource calibration 10; G3 mechanism pilot 20; G4 locked comparison 190; G5 robustness 45; G6 reporting 35; repair pool 30. These sum to 360 minutes. Transfer unused earlier time only while protecting the reporting reserve. Start with 1024/4096 and, if feasible, 16384 calibration attempts; one cold process plus three warmed fixed-work batches. Include likelihood, quadrature, and fixed 50,000-proposal diagnostics in the cost projection with a 2x margin. Freeze 100k or 25k solely on cost/precision planning; if neither fits, stop with supported infeasibility/inconclusive evidence rather than shrink the science.
+G0 reconciles inputs and mathematical identities; G1 validates correctness; G2 measures performance and plans precision; G3 validates known mechanisms; G4 completes the primary comparison; G5 completes required robustness; G6 validates and reproduces the report. None has a time allocation or repair allowance. Begin performance measurements at 1024/4096/appropriate 16384 attempts with cold/warm comparisons, and extend measurements when needed. A slow estimate guides scheduling and optimization, never omission of a required model or automatic inconclusive completion.
 
-Use round-robin mixed-speed confirmation tranches. Stopping is at the frozen survivor target or attempt cap, independent of arrival/null outcomes. Arbitrary wall-time truncation leaves a cell unresolved unless a separately valid predetermined design was completed. Save failures with config, exception, elapsed cost, backend, partial counts, and inference eligibility.
+Use fair tranches so difficult mixed-speed settings advance alongside other required cells. Initial sample sizes may be refined from precision analysis before confirmation. During confirmation, use the frozen cumulative checkpoint sequence and error allocation when deciding whether more precision is needed; maintain valid inference across all inspected checkpoints. Do not reset seeds, discard unfavorable prior evidence, or apply fixed-sample intervals repeatedly without the checkpoint adjustment. Preserve completed valid checkpoints and resume incomplete ones after an interruption.
 
-Checkpoint atomic aggregate batches with protocol hash, stable batch ID, RNG state/seed identity, counts, and cumulative resource usage. Resume verifies hashes and versions, never duplicates committed counts, charges interrupted work conservatively, and cannot reset budgets or change seeds. Replayed future histories count as work; reuse is not free computation. Accounting must survive interruption, including a launch left marked running.
+Checkpoint atomic aggregate batches with protocol hash, stable batch ID, checkpoint index, RNG state/seed identity, counts, and cumulative resource usage. Resume verifies hashes and versions, never duplicates committed counts, and preserves all recorded work, including an interrupted job. Replayed future histories count as work in the record. Diagnose and repair fixable defects and independently revalidate affected evidence; neither repair counts nor elapsed time terminate the work. If missing data or a demonstrated mathematical/physical obstacle prevents one claim, identify it precisely and complete every unaffected calculation and required report.
 
 ## 9. Package and artifact boundaries
 
 | Path | Responsibility |
 |---|---|
 | `pyproject.toml`, `requirements.lock.txt`, `README.md` | Installable package, verified environment, reproduction instructions |
-| `config/protocol.json` | Versioned scientific defaults and budgets, independent of run results |
+| `config/protocol.json` | Versioned scientific defaults, precision checkpoints, and uncertainty allocation |
 | `src/seti_audit/contracts.py` | Shared immutable config, catalog, schedule, history, counts, and result contracts |
 | `src/seti_audit/data.py` | Source metadata, bounded streaming acquisition, identity reconciliation, schedule validation/F1 |
 | `src/seti_audit/model.py` | Hazard inversion, marks, scalar/batched propagation, exact proposals, future replay |
@@ -197,7 +197,7 @@ Checkpoint atomic aggregate batches with protocol hash, stable batch ID, RNG sta
 | `src/seti_audit/oracles.py` | Independent quadrature, ideal-silence identities, tiny enumeration |
 | `src/seti_audit/theorem.py` | Kernel, repaired warning, bounded shell reference |
 | `src/seti_audit/inference.py` | Weighted estimates, integer intervals, family envelopes, decision certificates |
-| `src/seti_audit/budget.py`, `artifacts.py` | Cumulative resource ledger and atomic, validated artifacts |
+| `src/seti_audit/resources.py`, `artifacts.py` | Observational resource ledger and atomic, validated artifacts |
 | `src/seti_audit/experiments.py` | Matrix, stable seed/batch IDs, gates, protocol freeze, confirmation/resume |
 | `src/seti_audit/reporting.py` | Tables, static figures, claim records from saved evidence |
 | `src/seti_audit/cli.py`, `__init__.py`, `__main__.py` | Thin command dispatch and public entry points |
@@ -225,7 +225,7 @@ python -m seti_audit run --protocol results/protocol.lock.json --resume
 python -m seti_audit report --protocol results/protocol.lock.json --from-results
 ```
 
-`smoke` completes one synthetic history, linked likelihood, interval, and report row in under one minute after setup. Its synthetic provenance is explicit. Report regeneration never simulates or fetches data. CLI failures must distinguish unavailable input, invalid experiment, exhausted budget, and invalid configuration, preserving artifacts and unaffected work.
+`smoke` completes one synthetic history, linked likelihood, interval, and report row, recording its runtime without a time deadline. Its synthetic provenance is explicit. Report regeneration never simulates or fetches data. CLI failures distinguish unavailable input, invalid experiment, actual resource interruption, and invalid configuration, preserving artifacts and resumable work.
 
 ## 10. Acceptance and handoff
 
@@ -233,12 +233,12 @@ Before claiming implementation complete, pass the tiny mathematical gates, sourc
 
 The final research report leads with the decision and evidence grade; includes the actual/interval endpoint, catalog reconciliation, assumption ledger, theorem repair and performed checks, all model rows and envelopes, interaction/ideal comparisons, continuation/age sensitivity, costs/failures, and at most one useful next step. Required figures are family risk envelopes, likelihood versus risk with thresholds, ideal-survey discrepancy, and exact/leading theorem ratios; use tables if few values are resolved.
 
-Every claim receives one supported category: supported contribution, informative negative result, practical infeasibility, inconclusive evidence, or invalid experiment. Distinct claims may have different categories. A source access failure does not erase unaffected math; a theorem-reference defect does not automatically invalidate independent finite-site formulas; unresolved mandatory robustness limits the claim. A justified early stop delivers its derivation, available replay/evidence, runnable reached stages, and precise blockers instead of manufacturing unneeded software.
+Every claim receives one supported category: supported contribution, informative negative result, practical infeasibility, inconclusive evidence, or invalid experiment. Distinct claims may have different categories. A source access failure does not erase unaffected math; a theorem-reference defect does not automatically invalidate independent finite-site formulas; unresolved mandatory robustness limits the claim. A proof can discharge the particular claim it resolves, while all remaining comparisons and robustness work continue. Practical infeasibility requires a measured physical resource or algorithmic obstacle after documented remedies. Inconclusive evidence requires a specific empirical or identification limitation; computationally reducible uncertainty calls for further work. A resumable interruption is unfinished execution.
 
-The only data gates left for execution are verified schedule completeness, a defensible full-selection calibration bridge, and actual machine feasibility. They have predetermined fallbacks or stopping rules and do not require a new scientific design. Builders may choose internal array layout, batch size within limits, quadrature implementation, and plot styling while preserving these contracts. Scientific changes require an explicit deviation.
+The only data gates left for execution are verified schedule completeness, a defensible full-selection calibration bridge, and actual machine feasibility. They have explicit fallbacks or remediation paths and do not impose time or workload deadlines. Builders may choose internal array layout, physically suitable batch sizes, validated computational methods, quadrature implementation, and plot styling while preserving these contracts. Scientific changes require an explicit deviation.
 
 ## 11. Design review record
 
-A fresh scientific-software builder reviewed this specification and its delegated blueprint sections on 2026-11-02. The reviewer found no important unanswered questions needed to produce an implementation plan. This checks design completeness, not implemented correctness or empirical validity.
+A fresh scientific-software builder reviewed the initial specification and its delegated blueprint sections on 2026-11-02, before the user-directed removal of artificial execution caps. The reviewer found no important unanswered questions needed to produce an implementation plan. This checks design completeness, not implemented correctness or empirical validity.
 
-Documentation checks confirmed both source hashes, 62 transcribed rows and 61 distinct identifiers, matching duplicate geometry, six nominal sites within 100 light-years, the 360-minute allocation, local links, and Markdown whitespace/fence balance. No survey acquisition, PoC implementation, or simulation was performed during this design task.
+Documentation checks confirmed source hashes, 62 transcribed rows and 61 distinct identifiers, matching duplicate geometry, six nominal sites within 100 light-years, local links, and Markdown whitespace/fence balance. The user then directed removal of artificial time and workload caps; the blueprint, specification, and plan were revised consistently, including uncertainty accounting for precision extensions. No survey acquisition, PoC implementation, or simulation was performed during this documentation task.

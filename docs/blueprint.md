@@ -5,6 +5,8 @@
 **Target machine:** one MacBook with an M3 Max; inspect its actual RAM, free storage, operating system, and Python environment before allocating work.  
 **Deliverable you must produce:** a reproducible, scoped research result, including runnable code for the stages reached and an evidence-backed report. This document is the plan; it is not a report of a completed PoC.
 
+**Execution priority, revised 2 November 2026:** deliver the substantive research result and complete its required validation and robustness work. There is no artificial elapsed-time deadline, job quota, proposal quota, or repair allowance. Measure resource use to choose efficient implementations and organize resumable work. Continue until the research question is resolved at the supported evidence level or a specific mathematical, empirical, or physical resource obstacle is demonstrated; elapsed time or an arbitrary workload count is not such an obstacle. Complete every unaffected part and pursue ordinary repairs and alternative valid methods when a component is blocked.
+
 ## 1. Project decision, contribution, and scope
 
 Implement **a finite-target audit of the inference from the UCLA 2020–2023 Green Bank Telescope radio null to physical arrival during the following 100 years**. Use the supplied continuum theorem as an independently checked mathematical reference. The computational mechanism is chronological birth suppression at fixed stellar sites, coupled to an explicit likelihood model of the survey's observing and selection procedures. Compare it with an exactly integrable independent-site control and with the much stronger perfect-silence observation.
@@ -51,7 +53,7 @@ U_0-U_{\rm post}\ge 0.01,\qquad
 
 Both inequalities must be certified after numerical and Monte Carlo uncertainty is included. If \(U_0=0\), the ratio is not defined and no narrowing is claimed. One percentage point and 25% are research-resolution conventions chosen before comparison, not societal risk tolerances or evidence about plausible alien probabilities. Report smaller effects numerically when resolved, without calling them material.
 
-The primary conditional test is the **persistent, survey-admissible bright-emitter family** under the nominal detector-transfer assumption, with historical age 10,000 years and unchanged future birth rate. Test its robustness under the declared weaker detector, other emission histories, and future-rate alternatives. The all-civilization family including fully invisible counterparts has an analytic obstruction to envelope contraction (Section 4.3); do not spend a large simulation budget rediscovering it.
+The primary conditional test is the **persistent, survey-admissible bright-emitter family** under the nominal detector-transfer assumption, with historical age 10,000 years and unchanged future birth rate. Test its robustness under the declared weaker detector, other emission histories, and future-rate alternatives. The all-civilization family including fully invisible counterparts has an analytic obstruction to envelope contraction (Section 4.3); establish that result analytically rather than by redundant simulation. This resolves that family only; it does not replace the primary conditional audit or its required robustness work.
 
 A positive result requires trustworthy numerical intervals and a precise statement of the assumptions supporting it. An adequately precise failure to meet the threshold is an informative negative for this finite family. Wide intervals, inaccessible calibration, or omitted unresolved parameter cells make the relevant claim inconclusive, not false.
 
@@ -105,7 +107,7 @@ Attempt normal public or already-authorized access, using the dataset landing pa
 - `https://datadryad.org/api/v2/versions/370211`
 - `https://datadryad.org/api/v2/versions/370211/files`
 
-Do not bypass authentication, scrape credentials, or contact authors autonomously. Allow at most two ordinary attempts per failed route within the acquisition time cap. Preserve status codes and metadata.
+Do not bypass authentication, scrape credentials, or contact authors autonomously. Retry transient failures with appropriate backoff, inspect persistent failures, and use alternative ordinary public or already-authorized routes when useful. Preserve status codes and metadata. Neither a preset retry count nor elapsed acquisition time establishes that the data are unavailable; identify the actual access or completeness obstacle before using the fallback.
 
 If downloads work, stream each CSV once, extracting only unique observing metadata and a small validation sample. Use a streaming CSV reader; never load four gigabytes into a dataframe. Hash the original bytes while streaming. Keep compressed/raw originals only if disk permits; preserve exact identifiers, hashes, and the reduced schedule in all cases.
 
@@ -303,7 +305,7 @@ Small SciPy/binary64 checks performed during planning, on the hosted environment
 | Critical \(\alpha=3\) example | Exact/leading ratio about 1.03166730608; sampled warning-CDF error about .004620 |
 | Five-point derivative \(b'(h)=L(h,1)\) | Maximum relative difference \(1.60\times10^{-13}\) |
 
-The initial arbitrary-precision attempt could not run because `mpmath` was absent. The PDF's claimed 100-digit checks, its \(10^{-25}\)-scale errors, and its birth-suppression simulation were not independently reproduced. The referenced scripts `verify_contact_asymptotics.py` and `simulate_suppressed_contacts.py` and their result files were not attached. Reimplement only the bounded reference checks required below; do not claim possession of those scripts.
+The initial arbitrary-precision attempt could not run because `mpmath` was absent. The PDF's claimed 100-digit checks, its \(10^{-25}\)-scale errors, and its birth-suppression simulation were not independently reproduced. The referenced scripts `verify_contact_asymptotics.py` and `simulate_suppressed_contacts.py` and their result files were not attached. Reimplement the reference checks required below and extend them when needed to resolve a discrepancy; do not claim possession of those scripts.
 
 ## 4. The actual inference problem and exact limitations
 
@@ -592,7 +594,7 @@ Every occupied ball continues to grow through overlap. A suppressed source never
 
 Cost is \(O(n^2)\) per history and \(O(n^2)\) fixed geometry memory. A batch of 4096 histories × 61 binary64 clocks is about 2 MB for that array; several simultaneous arrays still require explicit memory measurement. Avoid a full `batch × n × n` tensor when a rank-wise update suffices.
 
-Batch the validated algorithm with NumPy if needed. No GPU, CUDA, neural model, or spatial grid is necessary. A compiled accelerator is not part of the required stack. Add one only if a measured bottleneck blocks a prespecified gate, within the repair allowance, and verify pathwise equality against the scalar engine.
+Batch the validated algorithm with NumPy if needed. No GPU, CUDA, neural model, or spatial grid is necessary. A compiled accelerator is not part of the required stack. Add one if a measured bottleneck warrants it, and verify pathwise equality against the scalar engine.
 
 ### 6.4 Exact survival proposal for fixed and mixed speeds
 
@@ -621,15 +623,15 @@ b_i=\Lambda_i^{-1}\!\left(\Lambda_i(l_i)+e_i\right),
 
 using \(b_i=\infty\) if the argument exceeds \(\Lambda_i(100)\). The hazard offset must not be omitted. Draw actual speed marks from their original law, run chronological suppression, and reject only histories whose **accepted** arrival is at or before zero. Accepted proposals are independent draws from the exact \(E\)-conditioned law.
 
-For S1/S2, all speeds equal \(v_*\); \(E=E_*\), so no proposal rejection is needed and \(C=C_*\) exactly. For S3/S4, denote proposal acceptance by \(a=\Pr(E\mid E_*)\). Then \(C=C_*a\). Estimate \(a\) in a **separate fixed batch of 50,000 proposals per mixed-speed demographic setting**, with an exact binomial interval; multiply its endpoints by \(C_*\). Charge this diagnostic to the same compute/history caps. Do not substitute the ratio from a survivor-stopped run without a separately justified inverse-sampling interval. Use the \(C\) interval when forming \(P(S)/C\) in Section 6.7.
+For S1/S2, all speeds equal \(v_*\); \(E=E_*\), so no proposal rejection is needed and \(C=C_*\) exactly. For S3/S4, denote proposal acceptance by \(a=\Pr(E\mid E_*)\). Then \(C=C_*a\). Estimate \(a\) in a **separate proposal-count diagnostic**, starting with a planned checkpoint of 50,000 proposals per mixed-speed demographic setting; multiply its exact binomial interval endpoints by \(C_*\). Increase its precision at predeclared checkpoints under Section 7.2 when needed. Record this work in the resource ledger. Do not substitute the ratio from a survivor-stopped run without a separately justified inverse-sampling interval. Use the \(C\) interval when forming \(P(S)/C\) in Section 6.7.
 
 Validate the subset and resulting conditional distribution by finite enumeration and by ordinary unconditional rejection at inexpensive low-rate settings. An independent planning enumeration of 1,728 three-site finite-support histories found 294 actual surviving histories, all among 486 \(E_*\) histories; direct and proposed conditional risks agreed exactly. This is a tiny diagnostic, not a survey simulation.
 
 Ideal silence obeys \(S\subseteq E\subseteq E_*\), yielding the useful acceptance bound \(a\ge P(S)/C_*\). With \(B=10{,}000,\mu=12\) and the transcribed geometry, \(P(S)\approx1.05713\times10^{-5}\). The bound is approximately .0196873 for \(v_*=.1\), and .581214 for \(v_*=.5\). The latter applies to S4. The sparse fast component in S3 may make its actual acceptance much higher than its conservative bound, but measure that before allocating work.
 
-These are analytic/planning calculations, not M3 timing measurements. Keep the mixed-speed attempt cap and the unresolved-cell rules. No importance-sampling rescue is authorized in this first PoC: the exact unweighted proposal already avoids the principal rare-survival waste.
+These are analytic/planning calculations, not M3 timing measurements. Use the exact unweighted proposal as the initial method and preserve unresolved cells while work continues. If measured efficiency remains an obstacle, improve batching, conditional sampling, or another independently validated estimator. Any importance-sampling method requires a correct weighted uncertainty treatment; ordinary binomial intervals cannot be applied to its weighted counts. Validate an alternative against the existing exact controls and record the method change before using it for a claim.
 
-**Future replay.** Preserve each surviving history's pre-zero candidates, accepted sources, marks, and occupation fronts. Only sites with no first attempt by zero receive a residual \(e_i^+\sim\operatorname{Exp}(1)\), independent of the past. Their future first attempt is at \(e_i^+/(k\lambda_i)\), or infinity for \(k=0\); censor attempts beyond 100. Use the same residual hazard and speed mark across \(k=0,1,10\) for pairing, and replay chronological suppression with the unchanged pre-zero fronts. A site whose first pre-zero attempt was rejected remains permanently irrelevant. Future rate changes do not change \(E\), \(C\), or the past survey likelihood. Charge every replay's work to the cumulative ledger and history-evaluation cap.
+**Future replay.** Preserve each surviving history's pre-zero candidates, accepted sources, marks, and occupation fronts. Only sites with no first attempt by zero receive a residual \(e_i^+\sim\operatorname{Exp}(1)\), independent of the past. Their future first attempt is at \(e_i^+/(k\lambda_i)\), or infinity for \(k=0\); censor attempts beyond 100. Use the same residual hazard and speed mark across \(k=0,1,10\) for pairing, and replay chronological suppression with the unchanged pre-zero fronts. A site whose first pre-zero attempt was rejected remains permanently irrelevant. Future rate changes do not change \(E\), \(C\), or the past survey likelihood. Record every replay's work in the cumulative resource ledger.
 
 ### 6.5 Linked observation likelihood
 
@@ -804,11 +806,11 @@ Also draw \(U_k\sim U(0,1)\), independently across histories, and set \(Z_k=1\{U
 
 Use Clopper–Pearson intervals, e.g. SciPy's documented exact option [R13]. Do not apply a binomial interval to noninteger weighted event counts. With zero null histories, report \(R\in[0,1]\); with zero arrivals, report an upper bound rather than zero. For \(n\) null histories and zero arrivals the one-sided upper bound is \(1-\alpha^{1/n}\), with \(\alpha\) adjusted for the declared multiplicity.
 
-Before confirmation, enumerate every scalar binomial bound used for decisions. Allocate familywise Monte Carlo error **0.025** to the primary E1/Dnom/k=1 decision and **0.025** to the required robustness/diagnostic decisions, using Bonferroni within each fixed list; their combined error is at most .05. Reused identical scalar bounds need only one allocation. This includes compatibility and endpoints, and any interval-weight components used in Section 7.4. Correlation between variants does not invalidate Bonferroni. Report the actual number of bounds and per-bound error; do not multiply by the three compatibility thresholds again when they use the same bounds.
+Before confirmation, enumerate every scalar binomial interval used for decisions. Allocate familywise Monte Carlo error **0.025** to the primary E1/Dnom/k=1 decision and **0.025** to the required robustness/diagnostic decisions. For a pool with total error \(A\) and \(M\) unique registry items, give item \(i\) at its predeclared checkpoint \(j=1,2,\ldots\) error \(\alpha_{i,j}=A/[M j(j+1)]\). Bonferroni across items and checkpoints preserves combined error at most .05 because \(\sum_{j\ge1}1/[j(j+1)]=1\). Reused identical intervals need only one registry item, including compatibility, endpoints, and interval-weight components in Section 7.4. Correlation between variants does not invalidate this allocation. Report registry sizes, checkpoint indices, and per-checkpoint errors; do not multiply by the three compatibility thresholds again when they use the same intervals.
 
 Calibration sampling uncertainty and astrophysical uncertainty are separate from this Monte Carlo error. The confidence level refers to numerical estimation under specified models, not the truth of those models.
 
-Set the sample size from the resource calibration, using cost and the predeclared choices below, before inspecting confirmatory risks. Rejection until a fixed survivor target or a fixed attempt cap is permissible because stopping depends on the survival filter, not the conditional arrival/null outcomes. Complete the prescribed batches. A wall-clock interruption that truncates a run is not grounds to certify its interval as if it had reached the plan; treat that cell as unresolved unless a separately valid predetermined completed design is available.
+Choose initial sample sizes using numerical resolution and measured sampling efficiency before confirmation. Predeclare cumulative checkpoints \(n_j=n_1 2^{j-1}\) for each survivor-count experiment and each separate proposal-count diagnostic. Continue to later checkpoints when uncertainty prevents a defensible conclusion; there is no fixed maximum checkpoint or attempt count. Rejection until a predetermined survivor count is valid because the filter depends on survival rather than arrival/null outcomes. Apply the checkpoint error allocation above whenever inspecting results for a decision, so outcome-dependent continuation does not inflate confidence. A machine interruption is a resumable operational event: preserve earlier valid checkpoint results, mark the incomplete checkpoint pending, and resume its prescribed draws without discarding unfavorable outcomes.
 
 ### 7.3 Certified model sets and endpoint comparisons
 
@@ -856,11 +858,11 @@ Do not infer a continuous-parameter risk envelope by checking risk at the two de
 
 ### 7.5 Quantitative resolution and failure handling
 
-Aim for 100,000 surviving histories per primary demographic ensemble. At \(\ell=.05\), that yields about 5,000 null histories on average; multiple-comparison intervals can still be roughly percentage-point scale for moderate risks. This is a planning calculation, not a guarantee of adequate precision.
+Use 100,000 surviving histories per primary demographic ensemble as an initial planning checkpoint, not a sample ceiling or completion criterion. At \(\ell=.05\), that yields about 5,000 null histories on average; multiple-comparison and checkpoint-adjusted intervals can still be roughly percentage-point scale for moderate risks. Use additional predeclared checkpoints, better validated numerical methods, or analytic bounds wherever needed to resolve the claim.
 
-If the budget cannot distinguish the material effect from uncertainty, report inconclusive evidence. Do not raise the effect threshold after seeing a result, omit a difficult model, or equate an unobserved rare event with impossibility. Exact zero is allowed only for an analytic geometric or model constraint, such as the hard-cutoff ideal-silence gap.
+When uncertainty prevents distinguishing the material effect, continue the required computation and diagnose whether the uncertainty is Monte Carlo error, numerical error, or genuine lack of empirical identification. Reduce computational error through additional valid checkpoints or improved methods. An inconclusive claim requires a specific remaining evidence or demonstrated resource obstacle, with completed unaffected analyses; the passing of a chosen duration or workload count is not sufficient. Do not raise the effect threshold after seeing a result, omit a difficult model, or equate an unobserved rare event with impossibility. Exact zero is allowed only for an analytic geometric or model constraint, such as the hard-cutoff ideal-silence gap.
 
-Every failed run retains its configuration, exception, elapsed time, backend, partial counts, and reason for exclusion from certified inference. A failed model remains unresolved in the family envelope. Numerical disagreements trigger bounded diagnosis, not selection of the more favorable implementation.
+Every failed run retains its configuration, exception, elapsed time, backend, partial counts, and reason for exclusion from certified inference. A failed model remains unresolved in the family envelope while repairs continue. Diagnose and repair numerical disagreements, independently revalidate the affected calculation, and preserve the full record; never select the more favorable implementation or terminate repairs after an arbitrary allowance.
 
 
 ## 8. Experiments and correctness gates
@@ -895,7 +897,7 @@ Also enumerate all marked histories on a two- or three-site **finite synthetic c
 
 For independent-site quadrature, initially target absolute probability error \(10^{-8}\) and relative error \(10^{-6}\) when the probability exceeds \(10^{-6}\). Refine split quadrature or use arbitrary precision on a small subset; accept the numerical contribution only when it is below \(10^{-4}\) absolute for every main reporting cell and well below its statistical uncertainty. These tolerances are comfortably below the .01 effect threshold. Do not treat an integrator's internal error estimate alone as validation.
 
-### 8.2 Bounded continuum reference experiment
+### 8.2 Continuum reference experiment
 
 Use \(d=3,T=c=1,\lambda\nu_3=1\) and \(F(q)=q^\alpha\) on \(0<q<1\), with \(\alpha\in\{.5,1,2,3,4,6\}\). Check \(h\in\{10^{-2},10^{-4},10^{-6},10^{-8}\}\) by stable quadrature, and \(10^{-12}\) only with adequate arbitrary precision.
 
@@ -910,14 +912,14 @@ Verify:
 
 Require relative agreement of independently evaluated ordinary-scale formulas within \(10^{-9}\), and high-precision convergence when requested tolerances make binary64 unreliable. Do not demand agreement with the limiting law to \(10^{-9}\) at finite \(h\); truncation error and floating-point error are different.
 
-Implement an exact finite-shell interaction check for **\(\alpha=1,\ h=.02,.5\)**, at most 10,000 conditional histories each. No vast spatial box or grid is needed. Conditional on ideal silence, sample independent restrictions to \(B_h\) and \(C_h\setminus B_h\):
+Implement an exact finite-shell interaction check for **\(\alpha=1,\ h=.02,.5\)**, starting with 10,000 conditional histories per horizon and increasing at predeclared checkpoints when needed for validation. These are initial precision choices, not workload ceilings. No vast spatial box or grid is needed. Conditional on ideal silence, sample independent restrictions to \(B_h\) and \(C_h\setminus B_h\):
 
 1. Compute \(b,s\).
 2. Draw \(N_B\sim\operatorname{Poisson}(b)\mid N_B\ge1\) and \(N_{C\setminus B}\sim\operatorname{Poisson}(s-b)\). Do not repeatedly sample an ordinary Poisson until it is positive. For these two settings \(b\le .25\); invert the truncated CDF using \(p_1=b/\operatorname{expm1}(b)\), \(p_{k+1}=p_kb/(k+1)\), and one open-interval uniform. If accumulated probabilities are numerically ambiguous, recompute at higher precision rather than truncating the random count. If \(b=0\), the conditional experiment is undefined and must not run.
 3. A point uniform in the shell intensity can be sampled by
    \(D=[T^{d+1}+U((T+h)^{d+1}-T^{d+1})]^{1/(d+1)}\),
    \(z=D U'^{1/d}\), \(r=cz\), \(t=D-z\), an independent uniform direction on the sphere, and the declared speed mark.
-4. Rejection from this shell sampler obtains a \(B_h\) point when \(D+qz\le T+h\), and a complementary point otherwise. This is cheap enough for the stated \(\alpha,h\), but is not authorized at tiny horizons or high \(\alpha\).
+4. Rejection from this shell sampler obtains a \(B_h\) point when \(D+qz\le T+h\), and a complementary point otherwise. This is efficient for the stated \(\alpha,h\). If validation requires tiny horizons or high \(\alpha\), derive and verify a suitable sampler instead of extrapolating the efficiency of this construction.
 5. Sort all sampled points and apply chronological suppression. Compute the free contacting source's own signal, the first accepted signal, and accepted physical arrival separately. When no accepted point arrives by \(T+h\), record \(H>h\) as right-censored. Do not use the earliest later arrival among shell points as the global later arrival: sources outside the shell may win after this horizon.
 6. Estimate
    \(p_T(h)=(1-e^{-b})\Pr(H\le h\mid N_B\ge1,S_T)\).
@@ -947,72 +949,49 @@ Include an analytic/one-site positive control with substantial survey updating a
 Do not compare to published transmitter-prevalence percentages as if they measured physical arrival. Include the published binomial prevalence formula only as a limiting selection-code check:
 \((1-f_{\rm TX}\eta D)^n\) for independent, single-opportunity sources under its own assumptions [R2]. The strong scientific baseline is the matched finite-site quadrature above.
 
-## 9. Resource budgets and evidence gates
+## 9. Execution resources, precision, and evidence gates
 
-### 9.1 Hard ceilings and actual-machine inspection
+### 9.1 Actual-machine inspection and resource accounting
 
 Inspect `uname -m`, `sw_vers`, physical memory, free disk space, Python version, NumPy/SciPy versions and build information, CPU availability, and any active power-saving restrictions. Confirm an ARM64-native Python when possible; record emulation if used. Do not infer RAM or backend precision from “M3 Max.”
 
 Use CPU binary64. Do not silently route work to MPS, change to float32, or offload computation. No cloud compute, CUDA, paid computation, services, or proprietary data is needed.
 
-Hard limits:
+There is no project wall-clock deadline, acquisition deadline, cumulative byte quota, history/proposal quota, launch quota, reporting-cell quota, or repair-count allowance. The declared 20 interacting demographic settings and 16 ideal-silence reference settings describe the scientific family, not a maximum number of runs or precision extensions. Initial sample sizes below are planning checkpoints, never grounds for declaring the research complete while its required claim remains unresolved.
 
-| Resource | Cumulative limit |
-|---|---|
-| Local experimental compute and result generation | **6 wall-clock hours**, including development trials, failed runs, compilation, repairs, and optional acceleration |
-| Network/data acquisition | **60 minutes elapsed** and **5.0 GB downloaded**; ordinary source/metadata downloads included |
-| Peak process RSS | \(\min(8\ {\rm GiB},0.25\times\text{physical RAM})\) |
-| Total project disk use | **8 GiB**, also requiring at least 4 GiB free beyond the planned footprint |
-| Generated results/checkpoints | **1 GiB**; summarize histories, do not dump every trajectory |
-| Simulated candidate universes | **60 million**, including discarded survival-proposal histories, pilot, controls, and repairs |
-| Per mixed-speed demographic ensemble | **12 million attempted universes**, and never beyond remaining global budget |
-| Primary survivor target | **100,000** per demographic ensemble; permitted cost-only fallback **25,000** |
-| History-age diagnostic survivor target | **25,000** each |
-| Ideal-silence reference target | **25,000** per primary demographic setting, reusing futures |
-| Continuum shell reference | **20,000** conditional histories total |
-| Development/calibration/pilot jobs | At most **30** launches total |
-| Confirmatory demographic ensembles | **20** interacting demographics plus **16** ideal-silence ensembles |
-| Derived reporting cells | At most **2,000**; pre-enumerate and hash the matrix |
-| Repair budget | **30 minutes compute**, at most two targeted repairs per failed gate; included in 6 hours |
+Monitor elapsed time, throughput, peak RSS, disk use, downloads, and evaluated histories. Record all work, including failures, exploratory trials, repairs, and replays, so the execution is auditable. These records inform optimization and scheduling rather than trigger an artificial termination. Respect actual available RAM and storage: reduce physical batch size, stream input, compress aggregates, and checkpoint/resume around operational interruptions. Avoid exhausting the machine. If a physical capacity problem remains, identify the measured requirement, attempted remedies, and specific additional resource needed; continue unaffected work.
 
-The local wall-clock ledger sums jobs even if run concurrently; parallel execution does not create extra budget. Dependency installation/network transfers use their separate allowance, but local build/test computation counts. Avoid a full archive download if disk reserve is insufficient; take the coarsened fallback.
+### 9.2 Evidence gates and completion
 
-Implementation and analysis effort are separate from simulation runtime. A planning estimate is 4–8 focused hours for implementation, review, and interpretation plus 2–6 hours of local computation, with overlap possible; roughly 8–16 hours end to end if access and dependencies cooperate. These are unmeasured estimates, not an M3 performance claim. An early analytic or data-limited outcome should take much less.
+| Stage | Required work | Evidence and next action |
+|---|---|---|
+| G0: constructive feasibility | Inspect machine; reconcile catalog; pursue source/schedule access; derive first-clock and dark-family identities | Use exact observations only with verified complete schedule. Otherwise execute F1/F2 and continue affected claims at their honest evidence grade. Resolve recoverable input problems; document an actual access or identity obstacle. |
+| G1: correctness | Scalar engine, one-site formulas, finite enumeration, phantom controls, linked detector, stable theorem kernel | Every exact invariant passes and independent calculations meet Section 8 tolerances. Diagnose, repair, and rerun affected checks until trustworthy; do not generate scientific claims from a known invalid engine. Unaffected independently validated work continues. |
+| G2: performance and precision planning | Representative low/high-rate batches, mixed-speed and age diagnostics; scalar/batched equality; throughput/RSS measurements | Choose efficient batching and initial checkpoint sizes for the required numerical resolution. A slow projection calls for optimization, scheduling, or more computation; it is not a reason to downgrade precision or drop models. |
+| G3: mechanism pilot | Independent development seeds; two demographic cases, positive/null/sign controls; finite-shell check | Verify known effects and uncertainty procedures; resolve defects before confirmation. Freeze scientific choices and the checkpoint/error-allocation scheme after repairs. A noisy empirical pilot does not reject the hypothesis. |
+| G4: locked comparison | Core 16 demographics, exact independent baseline, detector/emission evaluations | Complete the matrix and continue predeclared precision checkpoints until the primary inference has defensible numerical support. Retain unresolved cells throughout; no favorable outcome tuning or deletion. |
+| G5: declared robustness | Continuation replays, four age diagnostics, ideal-silence references, continuous-weight bounds | Complete each required sensitivity and resolve its numerical uncertainty. An analytic result may discharge the claim it actually proves; a missing sensitivity remains outstanding work unless a specific independent evidence obstacle is established. |
+| G6: diagnosis/report | Validate tables/plots, uncertainty, provenance, claim labels, and regeneration | Deliver completed results and their limitations, with a disposition for every required comparison. Reporting can proceed incrementally and receives whatever work is needed for a reproducible final result. |
 
-### 9.2 Stage decisions
+A gate enforces scientific validity or establishes a specific missing prerequisite; it carries no time allocation. Completion means the required question and comparisons have been answered with validated calculations and honest uncertainty, or a rigorous information limit has resolved a particular claim. A proven dark-family obstruction does not discharge the bright-family audit. Genuine empirical nonidentification may remain after all possible computational precision is obtained; explain and support that limitation rather than confusing it with unfinished simulation.
 
-| Stage | Question and minimum work | Local time allocation | Evidence and decision |
-|---|---|---:|---|
-| G0: constructive feasibility | Inspect machine; validate target rows; try metadata/schedule access; derive first-clock and dark-family identities | 10 min, plus bounded network allowance | Continue exact survey only with a reconciled schedule. Otherwise declare F1/F2 and continue unaffected work. Missing geometry with no usable Appendix B is a blocker for empirical geometry claims. |
-| G1: tiny correctness | Scalar engine, one-site formulas, finite enumeration, phantom controls, linked detector, stable theorem kernel | 20 min | Every exact invariant passes; independent probability calculations meet Section 8 tolerances. Repair within pool; if still wrong, stop comparisons and report invalid experiment. A proven theorem defect is documented separately. |
-| G2: resource calibration | Representative batches at \(\mu=1,12\), S1/S3/S4; small S4 age-diagnostic batches; scalar/batched equality; measure survival frequency, throughput, RSS | 10 min | Project total cost with 2× safety factor. Select 100k or 25k survivor target using only cost/precision planning, then freeze. If neither fits, complete analytic/data audit and classify intended comparison infeasible/inconclusive. |
-| G3: mechanism pilot | Fresh development seeds; two demographic cases, positive/null/sign controls; small continuum shell check | 20 min | Verify detection of known synthetic effects and correct uncertainty. A noisy empirical pilot is not a rejection of the hypothesis. Freeze protocol and confirmation seeds after repairs. |
-| G4: locked comparison | Core 16 demographics, exact independent baseline, primary detector/emission evaluations | 190 min | Run fixed design. Preserve all cells, including unresolved ones. No outcome-based tuning, extra rate points, or dropped difficult cases. |
-| G5: declared robustness | Continuation replays, four age diagnostics, ideal-silence references, continuous-weight bounds | 45 min | Resolve only declared sensitivities. Unfinished mandatory robustness narrows the conclusion; it cannot be replaced by favorable optional checks. |
-| G6: diagnosis/report | Validate tables/plots, uncertainty coverage, provenance, result labels, regeneration commands | 35 min reserved | Deliver the justified outcome at the achieved evidence level. Preserve failures and blocked inputs. |
-| Bounded repair pool | Specific code/data/numerics corrections | 30 min | Never resets a stage or total cap. Any scientific protocol change is exploratory and requires unused confirmation evidence. |
+### 9.3 Calibration, scaling, and precision extensions
 
-These allocations sum to six hours. Unused earlier time may support a later required stage, while the last 35 minutes remain reserved for reporting. Stop new simulations before that reserve is consumed.
+Begin performance measurements at 1024, 4096, and, when appropriate, 16384 attempted histories for low/high activity, then extend measurements if needed. Compare a cold process including imports and repeated warmed batches with identical work. Use `time.perf_counter` and record imports, geometry/data preparation, clocks, suppression, likelihood, quadrature, report generation, and peak RSS separately. Verify platform memory units. These are performance measurements, not execution deadlines or hardware-speedup research claims.
 
-### 9.3 Calibration, scaling, and resizing rules
+Estimate mixed-speed work from a conservative acceptance lower bound and include linked-likelihood, future-replay, independent quadrature, and proposal-diagnostic costs. Use the results to choose batch sizes and implementation improvements. Validate every optimization against identical histories and numerical precision; include setup/compilation costs in the record.
 
-Run 1024 then 4096 and, if feasible, 16384 attempted histories for low/high activity. Time one cold process including imports and three warmed batches with identical fixed work. Use `time.perf_counter` for workload timing, and report imports, geometry/data preparation, clock generation, suppression, likelihood evaluation, baseline quadrature, and report generation separately. Record raw timings and peak RSS with macOS `/usr/bin/time -l` or a verified process monitor; account for its units.
+Initial sample planning checkpoints are 100,000 survivors per primary demographic, 25,000 per age diagnostic and ideal-silence setting, 50,000 proposals per mixed-speed survival diagnostic, and 10,000 conditional shell histories per reference horizon. Refine these initial choices before confirmation if precision analysis requires it, and record the rationale. Extend cumulative checkpoints by doubling as specified in Section 7.2 when intervals or validation remain inadequate. There is no cost-only fallback to a smaller primary target and no upper sample ceiling. Schedule difficult settings fairly so every required cell advances; do not substitute nearby stars or remove a difficult demographic.
 
-There is no hardware-speedup research claim. These timings test feasibility. If optional batching/acceleration is reported as faster, compare identical histories, outputs, precision, thread settings, and batch sizes; include setup/compilation separately.
-
-Estimate mixed-speed cost from actual survivor frequency with a conservative lower confidence bound, not from a noisy point estimate alone. Estimate cost of each detector pass on already-surviving histories. Include the independent quadrature and repeated-source likelihood, not only event propagation.
-
-Choose 100k survivors only if the projected full required matrix with a 2× cost margin fits the unspent wall-clock budget AND the per-cell/global proposal ceilings. Include the fixed 50k-proposal survival diagnostics in this projection. Otherwise use the predeclared 25k target for the primary ensembles and clearly state the reduced resolution. Do not alter the model grid or decision threshold. Process mixed-speed cells in a fixed round-robin schedule so every cell receives an initial tranche before one difficult cell consumes its cap. The exact lower-speed-cone proposal, common-speed shortcut, and ideal-silence sampler remain available regardless of rare unconditional survival.
-
-If memory exceeds the ceiling, reduce batch size, not number of stars or numerical precision. If resource projection fails even at 25k, retain analytic controls and any valid completed cells, use conservative outer envelopes, and stop. Do not shrink to a conveniently nearby subset of stars.
+When uncertainty persists, diagnose its source: additional sampling addresses Monte Carlo error; independent refinement addresses quadrature/precision error; missing schedule/calibration information requires better evidence or explicit partial-identification bounds. More computation cannot remove a genuine information limit. Demonstrate that limit and complete the conditional analyses it leaves possible.
 
 ### 9.4 Exploration versus confirmation
 
 Use development seeds derived from `SeedSequence([20261101,0,...])` and confirmation seeds from `SeedSequence([20261101,1,...])`. Give every demographic ensemble and stage a stable integer ID. Record the generator type and NumPy version; do not depend on Python's randomized hash.
 
-Freeze the following in `protocol.lock.json` before confirmation: target and schedule hashes, fallback grade, parameter sets, detector bounds, experiment list, sample-size choice, attempt caps, tolerances, uncertainty allocation, seeds, stopping rules, and effect thresholds. Data quality and calibration checks may inform the freeze; arrival-probability comparisons may not determine the scientific grid.
+Freeze the following in `protocol.lock.json` before confirmation: source/catalog/schedule hashes, fallback grade, scientific parameter sets, detector bounds, experiment list, initial checkpoint sizes and extension sequence, tolerances, unique interval registry and checkpoint error allocation, seeds, and effect thresholds. Resource measurements and operational checkpoint frequency remain recorded metadata, not scientific stop rules. Arrival comparisons may not determine the scientific grid.
 
-Shared histories across variants are deliberate paired evidence. Use independent confirmation draws after debugging. A material post-freeze scientific change requires a dated deviation entry and fresh confirmation within the original remaining budget. If that is impossible, label the changed analysis exploratory.
+Shared histories across variants are deliberate paired evidence. Use independent confirmation draws after debugging. Precision extensions using the frozen checkpoint/error scheme are ordinary completion work and preserve accumulated valid evidence. A material scientific change requires a dated deviation and fresh independent confirmation for the changed analysis, regardless of how long that takes. If new evidence is not yet available, label the changed analysis exploratory while the required confirmation remains outstanding.
 
 ## 10. Repository, interfaces, and commands
 
@@ -1024,7 +1003,7 @@ Use ordinary Python scripts and local JSON/CSV/NPZ files. No database, notebook-
 |---|---|
 | `README.md` | Exact setup, short usage, data grade, main conclusion, reproduction commands |
 | `pyproject.toml`, `requirements.lock.txt` | Small package and resolved dependency versions |
-| `config/protocol.json` | Scientific choices from this brief and budgets |
+| `config/protocol.json` | Scientific choices, precision checkpoints, and uncertainty allocation |
 | `inputs/` | Theorem PDF if supplied; immutable retrieved source metadata |
 | `data/targets.csv`, `data/visits.csv` | Normalized sites and schedule, with provenance/status |
 | `src/seti_audit/data.py` | Streaming acquisition, catalog reconciliation, interval fallback |
@@ -1033,7 +1012,7 @@ Use ordinary Python scripts and local JSON/CSV/NPZ files. No database, notebook-
 | `src/seti_audit/oracles.py` | Independent-site quadrature, common-speed/silence identities, tiny enumeration |
 | `src/seti_audit/theorem.py` | Stable kernel, repaired warning expression, shell sampler |
 | `src/seti_audit/inference.py` | Weighted point estimates, Bernoulli audit draws, intervals, envelopes |
-| `src/seti_audit/cli.py` | Small command-line interface and cumulative budget ledger |
+| `src/seti_audit/cli.py` | Small command-line interface and cumulative resource-use records |
 | `src/seti_audit/__init__.py`, `src/seti_audit/__main__.py` | Package initialization and entry point dispatching to the CLI, so `python -m seti_audit` works |
 | `tests/` | Scientific correctness controls, not tests that merely restate implementation |
 | `results/` | Append-only run manifest, counts, timings, failures, protocol lock, tables |
@@ -1080,7 +1059,7 @@ python -m seti_audit run --protocol results/protocol.lock.json
 python -m seti_audit report --protocol results/protocol.lock.json
 ```
 
-Create a `smoke` subcommand completing one tiny target history, linked likelihood, interval, and report row in under a minute after setup. Also support `report --from-results` that regenerates essential tables and plots without simulation, and `run --resume` that preserves seeds, completed batches, scientific protocol, and the cumulative ledger. Resume must never rerun until a favorable outcome occurs.
+Create a `smoke` subcommand completing one tiny target history, linked likelihood, interval, and report row, and record its runtime without enforcing a time deadline. Also support `report --from-results` that regenerates essential tables and plots without simulation, and `run --resume` that preserves seeds, completed batches, scientific protocol, and the cumulative ledger. Resume retains all prior evidence and continues the prescribed checkpoint sequence; never restart, reseed, or discard histories to seek a favorable outcome.
 
 Do not use placeholder data when acquisition fails. `acquire` must select the declared fallback grade or report a precise blocker.
 
@@ -1107,8 +1086,8 @@ Use these outcome categories per claim, not one label hiding different component
 |---|---|
 | **Supported contribution** | Correctness controls and adequate precision support the prespecified conditional claim or a useful verified information limit |
 | **Informative negative result** | Valid comparison rejects material narrowing in the stated family, or a verified analytic obstruction rules out the proposed inference |
-| **Practical infeasibility** | Measured cost or supported scaling prevents the intended resolution within limits |
-| **Inconclusive evidence** | Missing calibration/schedule, interval width, limited family coverage, or budget leaves the decision unresolved |
+| **Practical infeasibility** | A measured physical resource or algorithmic obstacle persists after demonstrated remediation; identify the actual requirement and remedies, not an invented time/work quota |
+| **Inconclusive evidence** | A documented empirical or identification obstacle leaves the claim unresolved after all unaffected analyses; computationally reducible uncertainty remains work to complete |
 | **Invalid experiment** | A code, data, baseline, or measurement defect prevents interpretation |
 
 The analytic dark-family result can be supported while the exact survey-calibrated numerical question remains inconclusive. A positive conditional result under Dnom is not evidence that Dnom accurately describes the telescope for arbitrary civilizations. A timeout is not a refutation. A simulation matching the theorem is not a proof of its empirical applicability.
@@ -1117,9 +1096,9 @@ The analytic dark-family result can be supported while the exact survey-calibrat
 
 Deliver runnable code and usage instructions for implemented stages; the frozen configuration and provenance; raw aggregate results and failed-run records; essential tables/figures; and `report/REPORT.md`. Include a compact machine-readable `conclusions.json` with claim, outcome category, evidence IDs, scope, and unresolved dependencies.
 
-For an analytic early stop, deliver the derivation/counterexample, a minimal replay or symbolic/numeric check if implemented, and the reason later benchmarks are unnecessary or blocked. Do not manufacture a large codebase to satisfy an inapplicable benchmark requirement.
+When an analytic proof resolves a particular claim, deliver its derivation/counterexample and a minimal replay or symbolic/numeric check where useful. Omit only calculations whose purpose that proof has already discharged. Complete every other required comparison and validated executable stage; a narrow obstruction is not a substitute for the rest of the project.
 
-A successful completion includes a justified early stop. Execute ordinary repairs and all authorized unaffected stages autonomously. If exact survey reconstruction remains blocked, identify the smallest missing schedule/calibration input, finish the fallback, and report what was actually learned.
+Successful completion prioritizes the substantive research deliverables. Execute ordinary repairs and all authorized unaffected stages autonomously, and continue precision work while its uncertainty is computationally reducible. If exact survey reconstruction remains blocked by a documented access or evidence obstacle, identify the smallest missing schedule/calibration input, finish the fallback and conditional analyses, and report what was actually learned. An operational interruption leaves resumable work, not a completed project.
 
 ## 12. Research coverage and claim-to-evidence map
 
@@ -1130,7 +1109,7 @@ The literature search used both general and stronger-coverage search engines, pr
 | Ideal silence has a speed-independent likelihood | [R1, Lemma 2/E5]; related prior art [R5, Section IV.E] | Recheck causal inequality and exact controls |
 | Accepted early-contact asymptotics agree with free leading order | [R1, Theorem 1/Lemma 3] | Finite-horizon error remains; use exact bounds |
 | Source warning display needs repair | Rendered PDF p. 8; planning derivation in Section 3.3 | Check independent integral and derivative |
-| Published scripts were not supplied | Attachment inventory | Implement fresh bounded checks; never claim their reproduction |
+| Published scripts were not supplied | Attachment inventory | Implement fresh independently validated checks; never claim their reproduction |
 | A finite survey null is not no Earth-crossing signal | [R2–R4], [R7–R8] | Requires explicit observing/selection likelihood |
 | Incomplete-survey expansion inference is already prior art | [R6, Eqs. 14–20] | Novelty restricted to this instrument-specific audit |
 | Random-speed free growth differs from accepted growth | [R1], [R10, introduction/Eqs. 1.1–1.2] | Pathwise phantom controls |
@@ -1153,7 +1132,7 @@ Before reporting your result, repeat three distinct passes and record only mater
 
 1. **Mathematics and novelty:** recheck conditioning, finite-age support, phantom suppression, repaired source formula, matched baseline, and limits of prior-art claims.
 2. **Experiment:** try to explain any apparent narrowing by deleting high-risk unresolved cells, using a stronger detector, retuning parameter ranges, double-counting observations, falsely independent emission states, or numerical underflow. Check that a null can increase risk and that a weak/missing effect is distinguishable from insufficient resolution.
-3. **Execution:** replay setup from a clean project, inspect dependency and data availability, verify commands, budgets, restart behavior, hashes, and report regeneration.
+3. **Execution:** replay setup from a clean project, inspect dependency and data availability, verify commands, resource records, precision extensions, restart behavior, hashes, and report regeneration.
 
 This brief was itself subjected to distinct mathematical/novelty, experimental, and execution reviews, with affected portions rechecked after repair:
 
@@ -1161,11 +1140,11 @@ This brief was itself subjected to distinct mathematical/novelty, experimental, 
 |---|---|---|
 | Mathematics and novelty | Incomplete page-8 display; missing claimed scripts; invalid own-mark survival shortcut for mixed speeds; existing generic survey-likelihood prior art | Independent formula and checks; explicit unperformed reproduction; proved lower-speed-cone sampler; novelty narrowed to the scoped physical-arrival audit |
 | Experimental | Initial rate grid could not exclude any model; a null can raise risk; invisible counterparts prevent contraction; noisy threshold crossings could manufacture a conclusion | Grid changed analytically before arrival comparison; exact controls and inclusion proof; separate positive, negative, and inconclusive certification rules |
-| Execution and empirical fidelity | Duplicate target; unavailable exact timing and final calibration; frequency mask versus hit-efficiency mismatch; unnecessary nested quadrature | One site with linked visits; constructive F1/F2; explicit admissible class and transfer assumptions; analytic speed integration and fixed cumulative budgets |
+| Execution and empirical fidelity | Duplicate target; unavailable exact timing and final calibration; frequency mask versus hit-efficiency mismatch; unnecessary nested quadrature | One site with linked visits; constructive F1/F2; explicit admissible class and transfer assumptions; analytic speed integration and measured resource use with valid precision extensions |
 
-No full PoC or M3 benchmark was performed during this planning work. Any new fixable defect must be repaired within the bounded allowance. The unresolved empirical uncertainties remain explicit assumptions, early gates, or blockers.
+No full PoC or M3 benchmark was performed during this planning work. Diagnose and repair every fixable defect and independently revalidate the affected work. The unresolved empirical uncertainties remain explicit assumptions, early gates, or blockers.
 
-Stress outcomes have predetermined dispositions: a nonconstructive or incorrect theorem cannot validate the reference but need not invalidate independently derived finite-site formulas; an inaccessible schedule triggers F1; a missing final detector calibration triggers F2; a known mechanism narrows novelty; favorable synthetic-only success is not an empirical contribution; a stronger exact baseline removing an effect is reported; excessive cost triggers scope-qualified infeasibility; and a false primary hypothesis is a legitimate negative result.
+Stress outcomes have predetermined dispositions: a nonconstructive or incorrect theorem cannot validate the reference but need not invalidate independently derived finite-site formulas; an inaccessible schedule triggers F1; a missing final detector calibration triggers F2; a known mechanism narrows novelty; favorable synthetic-only success is not an empirical contribution; a stronger exact baseline removing an effect is reported; slow computation triggers optimization and continued execution, while a demonstrated physical resource obstacle is documented with attempted remedies; and a false primary hypothesis is a legitimate negative result.
 
 
 ## Appendix A. References and precise source locations
@@ -1286,4 +1265,4 @@ These are SHA-256 hashes returned by the archive metadata, not hashes of CSV byt
 | `GBT20230513.csv` | 1187859985 | `2f10df194e004406c9b9861470724fe115ea466c3a94f351c458d9914f16d1a2` |
 | `README.md` | 2665 | `28b528000ad4f48aed8a1b0ee8173df383f4ee366f5aa5ee14a4e6763fc3cb51` |
 
-Before ending your execution, confirm that the report identifies every unperformed validation, contains no invented schedule or calibration truth, reproduces its tables from saved results, includes all unresolved models in outer envelopes, and distinguishes analytic impossibility from finite-simulation non-observation. Verify all artifact paths and commands. Stop optional work once the reached claim is adequately resolved or a gate has conclusively limited it.
+Before ending your execution, confirm that the report identifies every unperformed validation, contains no invented schedule or calibration truth, reproduces its tables from saved results, includes all unresolved models in outer envelopes, and distinguishes analytic impossibility from finite-simulation non-observation. Verify all artifact paths and commands. Complete all required claims, robustness work, and validation before closing the project; omit only redundant work whose purpose has already been resolved by evidence.
