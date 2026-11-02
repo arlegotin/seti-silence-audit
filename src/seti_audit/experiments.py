@@ -267,7 +267,8 @@ def build_matrix(protocol, schedule):
         bounded = not invisible and not unconstrained and (schedule.schedule_grade == "coarsened_F1" or detector == "Dpositive" or robust)
         cid = f"{kind}:m{model.model_id}:k{k:g}:{emission}:{detector}" + (":robust" if robust else "")
         baseline = f"{kind if kind != 'ideal_silence' else 'interacting'}:m{model.model_id}:k{k:g}"
-        families = [f"{kind}/{emission}/{detector}/k{k:g}" + ("/robust" if robust else "")]
+        family_scope = f"{kind}/age{model.age_years:g}" if model.model_id >= 16 else kind
+        families = [f"{family_scope}/{emission}/{detector}/k{k:g}" + ("/robust" if robust else "")]
         if model.model_id < 16:
             families.append(f"{kind}/all_civilizations/k{k:g}")
             if emission == "E1" and detector == "Dnom" and k == 1 and not robust:
@@ -422,11 +423,14 @@ def freeze_protocol(protocol, catalog, schedule, calibration, pilot, output_dir)
         if calibration.timings.get("identity") != identity or pilot.diagnostics.get("identity") != identity:
             raise ValueError("Stale calibration/pilot evidence identity")
         correctness = read_json_checked(Path("results/correctness.json"))
-        if correctness.get("status") != "passed" or any(not Path(p).is_file() or hashlib.sha256(Path(p).read_bytes()).hexdigest() != sha
-                                                         for p, sha in correctness.get("component_hashes", {}).items()):
-            raise ValueError("Stale correctness evidence")
-        if not correctness.get("component_hashes"):
-            raise ValueError("Missing correctness evidence")
+        if (correctness.get("scope") != "full" or correctness.get("status") != "passed"
+                or correctness.get("test_count", 0) <= 0 or correctness.get("skipped_count", 0) != 0):
+            raise ArithmeticError("Missing full correctness evidence; run check from the research checkout")
+        expected_components = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in correctness_components()}
+        body = {key: value for key, value in correctness.items() if key != "evidence_id"}
+        if (correctness.get("component_hashes") != expected_components
+                or correctness.get("evidence_id") != "G1:" + canonical_hash(body)):
+            raise ArithmeticError("Stale or invalid full correctness evidence")
         if catalog.provenance["source_status"] != "source_verified" or len(catalog.geometry.site_ids) != 61 or len(catalog.source_rows) != 62:
             raise ValueError("Missing verified complete catalog")
         if schedule.schedule_grade == "unavailable":
@@ -451,6 +455,7 @@ def freeze_protocol(protocol, catalog, schedule, calibration, pilot, output_dir)
             "execution_identity": execution_identity(), "catalog_provenance": catalog.provenance,
             "geometry": {"site_ids": g.site_ids, "xyz_ly": g.xyz_ly.tolist(), "radii_ly": g.radii_ly.tolist(), "distances_ly": g.distances_ly.tolist()},
             "schedule": asdict(schedule), "calibration_evidence": calibration.evidence_ids, "pilot_evidence": pilot.evidence_ids,
+            "correctness_evidence": correctness["evidence_id"] if protocol.purpose == "research" else "synthetic-smoke-only",
             "initial_survivors": {str(k): v for k, v in calibration.initial_survivors.items()},
             "initial_diagnostic_proposals": {str(k): v for k, v in calibration.initial_diagnostic_proposals.items()},
             "initial_ideal_survivors": protocol.initial_checkpoints["ideal_survivors"],
@@ -459,7 +464,7 @@ def freeze_protocol(protocol, catalog, schedule, calibration, pilot, output_dir)
             "ideal_silence_probabilities": {str(m.model_id): ideal_silence_probability(m, g) for m in protocol.models if m.model_id < 16},
             "precision_policy": {"cumulative_multiplier": 2, "statistical_interval_width": .01,
                                  "compatibility_error_width": .005, "alpha_rule": "A/(M*j*(j+1))"},
-            "rng": {"bit_generator": "PCG64", "root": [20261101, 1],
+            "rng": {"bit_generator": "PCG64", "root": [20261101, 0 if protocol.purpose == "smoke" else 1],
                     "stages": {"interacting": 4, "diagnostic": 5, "ideal": 6, "shell": 7},
                     "purposes": {"prefix": 10, "future": 20, "audit": 30, "diagnostic": 40, "ideal": 50, "shell": 70},
                     "identity": "[20261101,phase,stage_id,model_id,purpose_id,batch_id]"}}
@@ -499,3 +504,41 @@ def run_confirmation(protocol_lock, resume, ledger):
 def request_precision_extension(protocol_lock, group_ids=None):
     from .runner import request_precision_extension as request
     return request(protocol_lock, group_ids)
+
+
+def correctness_components():
+    """Source and offline controls that a full readiness record must cover."""
+    paths = (list(Path("src/seti_audit").glob("*.py")) + list(Path("tests").glob("test_*.py"))
+             + list(Path("tests/fixtures").glob("*.json")) + [Path("tests/conftest.py"), Path("requirements.lock.txt")])
+    if not Path("tests").is_dir() or not Path("pyproject.toml").is_file():
+        raise FileNotFoundError("Run full correctness checks from the research checkout root")
+    return sorted(set(paths))
+
+
+def verify_correctness(output_path, ledger, *, test_paths=None):
+    import hashlib
+    import importlib.metadata
+    import re
+    scope = "full" if test_paths is None else "selected"
+    paths = correctness_components()
+    before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+    command = [sys.executable, "-m", "pytest", *(test_paths or ()), "-q"]
+    job, start = ledger.start("G1", details={"kind": "correctness", "scope": scope}), time.perf_counter()
+    process = subprocess.run(command, capture_output=True, text=True, check=False)
+    output = process.stdout + process.stderr
+    matches = re.findall(r"(\d+) passed", output)
+    skipped = re.findall(r"(\d+) skipped", output)
+    count, skips = int(matches[-1]) if matches else 0, int(skipped[-1]) if skipped else 0
+    after = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+    passed = process.returncode == 0 and count > 0 and skips == 0 and before == after
+    elapsed = time.perf_counter() - start
+    record = {"status": "passed" if passed else "failed", "scope": scope, "command": command, "output": output,
+              "test_count": count, "skipped_count": skips, "returncode": process.returncode,
+              "component_hashes": after, "packages": {name: importlib.metadata.version(name)
+                                                      for name in ("numpy", "scipy", "matplotlib", "pytest", "mpmath")},
+              "elapsed_seconds": elapsed}
+    record["evidence_id"] = "G1:" + canonical_hash(record)
+    write_json_atomic(Path(output_path), record)
+    ledger.finish(job, time.perf_counter() - start, 0, status="complete" if passed else "failed",
+                  details={"evidence_id": record["evidence_id"], "tests": count, "scope": scope})
+    return record

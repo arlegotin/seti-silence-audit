@@ -170,3 +170,21 @@ def test_missing_original_baseline_cannot_be_replaced_by_ideal_samples():
     row = summarize({"c": AuditCounts(100, 10, 100, 10, 100., 10., {})}, lock, {"R": 1}).rows[0]
     assert row["estimates"]["R0"] is None
     assert row["intervals"]["R0"] == [0., 1.]
+
+
+def test_ideal_survival_ratio_point_is_bounded_with_raw_diagnostic_retained():
+    from seti_audit.contracts import AuditCounts
+    from seti_audit.inference import summarize
+
+    lock = point_lock()
+    lock["cells"][0].update(ideal_reference=True, baseline_counts_id="base", ideal_silence_probability=.85,
+                             survival={"constant": 1., "diagnostic_cell_id": "proposal", "interval_id": "acceptance"})
+    lock["bound_registry"]["items"]["acceptance"] = {"pool": "diagnostics"}
+    lock["bound_registry"]["pools"]["diagnostics"] = {"A": .025, "M": 1}
+    counts = {"base": AuditCounts(100, 40, 100, 40, 100., 40., {}), "c": AuditCounts(100, 10, 100, 10, 100., 10., {}),
+              "proposal": AuditCounts(10, 8, 0, 0, 0., 0., {})}
+    row = summarize(counts, lock, {"R0": 1, "R": 1, "acceptance": 1}).rows[0]
+    assert row["estimates"]["likelihood"] == 1.
+    assert row["raw_ideal_likelihood_ratio"] == pytest.approx(1.0625)
+    assert row["estimate_status"]["likelihood"] == "clipped_survival_ratio"
+    assert row["intervals"]["likelihood"][1] == 1.

@@ -1,0 +1,15 @@
+{
+  "purpose": "smoke",
+  "label": "Synthetic reporting control; no survey inference",
+  "cells": [
+    {"cell_id": "bright", "model_id": 0, "families": ["interacting/primary"]},
+    {"cell_id": "excluded", "model_id": 1, "families": ["interacting/primary", "excluded_only"]}
+  ],
+  "rows": {
+    "bright": {"C": [0.8, 0.9], "likelihood": [0.8, 0.9], "R0": [0.19, 0.21], "R": [0.07, 0.08]},
+    "excluded": {"C": [0.6, 0.7], "likelihood": [0.001, 0.005], "R0": [0.39, 0.41], "R": [0.12, 0.13]}
+  },
+  "schedule_grade": "coarsened_F1",
+  "detector_grade": "assumed_F2",
+  "theorem_status": "unperformed"
+}

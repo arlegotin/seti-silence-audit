@@ -7,8 +7,10 @@ import json
 import importlib.metadata
 import math
 import os
+import errno
 from pathlib import Path
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -124,6 +126,37 @@ def physical_batch_size(desired: int, *, bytes_per_history: int, available_bytes
     if count < 1:
         raise MemoryError("Available memory cannot hold one history batch element")
     return count
+
+
+def resource_preflight(output_dir: Path, *, bytes_required: int = 1) -> dict:
+    """Measure current physical capacity; no elapsed-time or workload policy."""
+    if not isinstance(bytes_required, int) or isinstance(bytes_required, bool) or bytes_required < 0:
+        raise ValueError("Nonnegative measured storage requirement needed")
+    probe = Path(output_dir).resolve()
+    while not probe.exists():
+        probe = probe.parent
+    disk = shutil.disk_usage(probe)
+    available, source, error = None, None, None
+    if sys.platform == "darwin":
+        process = subprocess.run(["vm_stat"], capture_output=True, text=True, check=False)
+        page_size = re.search(r"page size of (\d+) bytes", process.stdout)
+        pages = {name: int(value) for name, value in re.findall(r"Pages (free|inactive|speculative):\s+(\d+)\.", process.stdout)}
+        if process.returncode == 0 and page_size and len(pages) == 3:
+            available = sum(pages.values()) * int(page_size.group(1))
+            source = "vm_stat free+inactive+speculative; reclaimable-memory estimate"
+        else:
+            error = process.stderr.strip() or "vm_stat output unavailable"
+    else:
+        try:
+            available = int(os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE"))
+            source = "OS available physical pages"
+        except (ValueError, OSError):
+            error = "Available-memory probe unsupported"
+    result = {"disk_total_bytes": disk.total, "disk_free_bytes": disk.free, "bytes_required": bytes_required,
+              "available_memory_bytes": available, "memory_probe": source, "memory_probe_error": error}
+    if disk.free < bytes_required:
+        raise OSError(errno.ENOSPC, f"Measured free storage {disk.free} bytes is below the current {bytes_required}-byte requirement")
+    return result
 
 
 def inspect_environment() -> dict:

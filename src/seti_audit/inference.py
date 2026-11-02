@@ -174,8 +174,10 @@ def summarize(counts_by_cell: dict[str, AuditCounts], protocol_lock: dict,
                     c = bounds["C"]
                     bounds["likelihood"] = WeightBounds(min(1., silence / c.high) if c.high else 0.,
                                                         min(1., silence / c.low) if c.low else 1.)
-                    points["likelihood"] = silence / points["C"] if points["C"] else None
-                    statuses["likelihood"] = "analytic_silence_over_survival"
+                    ratio = silence / points["C"] if points["C"] else None
+                    row["raw_ideal_likelihood_ratio"] = ratio
+                    points["likelihood"] = min(1., ratio) if ratio is not None else None
+                    statuses["likelihood"] = "clipped_survival_ratio" if ratio is not None and ratio > 1 else "analytic_silence_over_survival"
                 elif cell.get("analytic_unconstrained_detector"):
                     statuses["likelihood"] = statuses["R"] = "unconstrained_detector_outer"
                 elif n.bound_counts:

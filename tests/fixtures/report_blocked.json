@@ -1,0 +1,14 @@
+{
+  "purpose": "smoke",
+  "label": "Synthetic missing-cell and calibration control",
+  "cells": [
+    {"cell_id": "bright", "model_id": 0, "families": ["interacting/primary"]},
+    {"cell_id": "missing", "model_id": 2, "families": ["interacting/primary"]}
+  ],
+  "rows": {
+    "bright": {"C": [0.8, 0.9], "likelihood": [0.8, 0.9], "R0": [0.19, 0.21], "R": [0.07, 0.08]}
+  },
+  "schedule_grade": "coarsened_F1",
+  "detector_grade": "assumed_F2",
+  "theorem_status": "unperformed"
+}

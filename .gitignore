@@ -9,3 +9,5 @@ results/*.jsonl
 results/*.lock
 results/bootstrap-usage.jsonl
 results/checkpoints/
+results/smoke/
+results/smoke-final/

@@ -18,6 +18,10 @@ def test_complete_smoke_confirmation_and_repeat_resume_are_identical(frozen_smok
     assert all(row["completion_status"] != "pending" for row in result["summary"]["rows"])
     assert len(result["reference_checks"]) == 2
     assert all(row["trials"] == 8 for row in result["reference_checks"])
+    assert all(seed[1] == 0 for batch in result["batches"] for seed in batch["seed_roots"].values())
+    total = result["execution_totals"]["groups"]["interacting:0"]
+    assert total["sampled_histories"] == total["attempted_proposals"] == 8
+    assert total["history_evaluations"] >= 32
     usage = ledger.usage()
     repeated = run_confirmation(frozen_smoke, True, ledger)
     assert repeated == result

@@ -69,3 +69,18 @@ def test_logged_command_keeps_actual_exit_status(tmp_path):
     assert records[-1]["details"]["returncode"] == 7
     assert records[-1]["details"]["max_rss_bytes"] > 0
     assert records[-1]["details"]["free_disk_bytes"] >= 0
+
+
+def test_preflight_measures_capacity_and_rejects_actual_disk_shortage(tmp_path, monkeypatch):
+    from collections import namedtuple
+    import errno
+    import seti_audit.resources as resources
+
+    measured = resources.resource_preflight(tmp_path, bytes_required=1)
+    assert measured["disk_free_bytes"] > 0
+    assert measured["available_memory_bytes"] is None or measured["available_memory_bytes"] > 0
+    usage = namedtuple("usage", "total used free")
+    monkeypatch.setattr(resources.shutil, "disk_usage", lambda path: usage(100, 100, 0))
+    with pytest.raises(OSError) as failure:
+        resources.resource_preflight(tmp_path, bytes_required=1024)
+    assert failure.value.errno == errno.ENOSPC

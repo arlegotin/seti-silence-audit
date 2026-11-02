@@ -34,3 +34,6 @@ def test_complete_matrix_preserves_scientific_combinations(repo_root, tmp_path):
                 and c["emission_id"] == "E1" and c["detector_id"] == "Dnom"]
     assert len({c["interval_ids"]["null_low"] for c in selected}) == 1
     assert all(c["thresholds"] == [.01, .05, .1] for c in cells)
+    nominal = [c for c in cells if "interacting/E1/Dnom/k1" in c["families"]]
+    assert {c["model_id"] for c in nominal} == set(range(16))
+    assert all(any("/age" in family for family in c["families"]) for c in cells if c["model_id"] >= 16)

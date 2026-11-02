@@ -57,9 +57,9 @@ def _groups(lock):
     return groups
 
 
-def _rng(kind, model_id, purpose, batch_index):
+def _rng(kind, model_id, purpose, batch_index, phase=1):
     stage = {"interacting": 4, "diagnostic": 5, "ideal": 6, "shell": 7}[kind]
-    seed = [20261101, 1, stage, model_id, purpose, batch_index]
+    seed = [20261101, phase, stage, model_id, purpose, batch_index]
     return np.random.Generator(np.random.PCG64(np.random.SeedSequence(seed))), seed
 
 
@@ -103,7 +103,8 @@ def _compute_batch(lock, group, index, count, look, objects, ledger):
         boundary_rechecks.extend({"context": context, "history_index": int(i), "diagnostics": value}
                                  for i, value in checks.items())
     purpose = {"diagnostic": 40, "ideal": 50, "interacting": 10, "shell": 70}[kind]
-    prefix_rng, roots["prefix"] = _rng(kind, mid, purpose, index)
+    phase = lock["rng"]["root"][1]
+    prefix_rng, roots["prefix"] = _rng(kind, mid, purpose, index, phase)
     try:
         if kind == "shell":
             from .theorem import sample_shell, shell_evidence
@@ -119,6 +120,7 @@ def _compute_batch(lock, group, index, count, look, objects, ledger):
                     successes = int(np.sum((sample.free_horizon_fractions <= z) & (sample.free_warning_fractions <= u)))
                     counts[f"shell:{mid}:z{z:g}:u{u:g}"] = AuditCounts(count, successes, 0, 0, 0., 0., {})
             extra["shell_summary"] = shell_evidence(sample, h)
+            extra["nested_history_evaluations"] = sample.trials
         elif kind == "diagnostic":
             clocks = sample_clock_batch(model, geometry, prefix_rng, count, "lower_cone", 0)
             note_clock(clocks.diagnostics)
@@ -129,6 +131,7 @@ def _compute_batch(lock, group, index, count, look, objects, ledger):
         else:
             if kind == "ideal":
                 prefix = sample_clock_batch(model, geometry, prefix_rng, count, "ideal_silence", 0)
+                attempts += count
                 note_clock(prefix.diagnostics)
             else:
                 remaining, birth_parts, speed_parts, gap_parts = count, [], [], []
@@ -146,7 +149,7 @@ def _compute_batch(lock, group, index, count, look, objects, ledger):
                     ledger.progress(job, time.perf_counter() - start, work,
                                     details={"group": kind, "model_id": mid, "survivors_pending": remaining, "attempts": attempts})
                 prefix = ClockBatch(np.concatenate(birth_parts), np.concatenate(speed_parts), np.concatenate(gap_parts))
-            future_rng, roots["future"] = _rng(kind, mid, 20, index)
+            future_rng, roots["future"] = _rng(kind, mid, 20, index, phase)
             multipliers = (0., 1., 10.) if mid < 16 else (1.,)
             futures = paired_future_batches(prefix, model, geometry, future_rng, multipliers)
             work += count * len(multipliers)
@@ -154,7 +157,7 @@ def _compute_batch(lock, group, index, count, look, objects, ledger):
             for k, history in futures.items():
                 note_history(history, f"future_k{k:g}")
             states["future"] = future_rng.bit_generator.state
-            audit_rng, roots["audit"] = _rng(kind, mid, 30, index)
+            audit_rng, roots["audit"] = _rng(kind, mid, 30, index, phase)
             uniforms, rejects = _uniform_open(audit_rng, count)
             numerical["open_uniform_rejections"] += rejects
             states["audit"] = audit_rng.bit_generator.state
@@ -509,6 +512,11 @@ def run_confirmation(protocol_lock, resume, ledger):
                                "batches": [{"batch_id": b["_batch_id"], "protocol_hash": b["protocol_hash"],
                                             "group_id": b["group_id"], "sample_size": b["sample_size"],
                                             "seed_roots": b["seed_roots"]} for b in batches]}
+        result["execution_totals"] = {"groups": {
+            key: {"sampled_histories": sum(b["sample_size"] for b in batches if b["group_id"] == key),
+                  "attempted_proposals": sum(b["attempts"] for b in batches if b["group_id"] == key),
+                  "history_evaluations": sum(b["history_evaluations"] + b.get("nested_history_evaluations", 0)
+                                             for b in batches if b["group_id"] == key)} for key in groups}}
         result["content_hash"] = canonical_hash(result)
         write_json_atomic(final_path, result)
         return read_json_checked(final_path)

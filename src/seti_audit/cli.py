@@ -15,7 +15,7 @@ from .artifacts import read_json_checked, write_json_atomic
 from .contracts import load_protocol
 
 
-def main(argv: list[str] | None = None) -> int:
+def _dispatch(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m seti_audit")
     subcommands = parser.add_subparsers(dest="command", required=True)
     logged = subcommands.add_parser("run-logged", help="Run a command and preserve resource/exit records")
@@ -31,6 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     theorem.add_argument("--phase", choices=("development", "confirmation"), default="development")
     theorem.add_argument("--source", type=Path, default=Path("docs/silence_contact_theorem.pdf"))
     theorem.add_argument("--out", type=Path, default=Path("results/theorem"))
+    theorem.add_argument("--config", type=Path)
     for name in ("acquire", "validate-data"):
         command = subcommands.add_parser(name)
         command.add_argument("--config", type=Path, default=Path("config/protocol.json"))
@@ -51,7 +52,40 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--protocol", type=Path, required=True)
     run.add_argument("--resume", action="store_true")
     run.add_argument("--extend", action="store_true", help="Resume at the next frozen precision checkpoint")
+    smoke = subcommands.add_parser("smoke", help="Run a complete explicitly synthetic offline pipeline")
+    smoke.add_argument("--config", type=Path, default=Path("config/protocol.json"))
+    smoke.add_argument("--out", type=Path, default=Path("results/smoke"))
+    report = subcommands.add_parser("report", help="Regenerate tables, figures and scoped claims from saved evidence")
+    report_source = report.add_mutually_exclusive_group()
+    report_source.add_argument("--protocol", type=Path, default=Path("results/protocol.lock.json"))
+    report_source.add_argument("--evidence", type=Path, help="Saved pre-freeze component evidence; no protocol is invented")
+    report.add_argument("--from-results", action="store_true")
+    report.add_argument("--out", type=Path)
+    checks = subcommands.add_parser("check", help="Run the complete offline correctness suite and save readiness evidence")
+    checks.add_argument("--out", type=Path, default=Path("results/correctness.json"))
     options = parser.parse_args(argv)
+    if options.command == "smoke":
+        from .reporting import run_smoke
+        result = run_smoke(load_protocol(options.config), options.out, ResourceLedger(options.out / "results/resources.jsonl"))
+        print(json.dumps(result))
+        return 0
+    if options.command == "report":
+        from .reporting import render_report, render_evidence_report
+        source = options.evidence or options.protocol
+        read_json_checked(source)
+        root = source.parent
+        output = options.out or root.parent / "report"
+        result = (render_evidence_report(root, output, evidence_path=source) if options.evidence
+                  else render_report(root, output, protocol_path=source))
+        print(json.dumps({"protocol_hash": result["protocol_hash"], "report": result["artifacts"]["report"]["path"],
+                          "artifacts": len(result["artifacts"])}))
+        return 0
+    if options.command == "check":
+        from .experiments import verify_correctness
+        result = verify_correctness(options.out, ResourceLedger(options.out.parent / "resources.jsonl"))
+        print(json.dumps({"status": result["status"], "scope": result["scope"], "test_count": result["test_count"],
+                          "evidence_id": result["evidence_id"]}))
+        return 0 if result["status"] == "passed" else 4
     if options.command in {"freeze", "run"}:
         from .contracts import CalibrationResult, PilotResult, WeightBounds
         from .experiments import freeze_protocol, request_precision_extension, run_confirmation
@@ -119,6 +153,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if options.command == "theorem-check":
         from .theorem import check_theorem
+        if options.shell and options.phase == "confirmation":
+            raise ValueError("Confirmatory shell work belongs to run --protocol, with its frozen seed and interval registry")
+        if options.config is not None:
+            import hashlib
+            protocol = load_protocol(options.config)
+            expected = protocol.source_hashes["docs/silence_contact_theorem.pdf"]
+            if hashlib.sha256(options.source.read_bytes()).hexdigest() != expected:
+                raise ValueError("Theorem source hash mismatch")
         ledger = ResourceLedger(Path("results/resources.jsonl"))
         job, start = ledger.start("G1"), time.perf_counter()
         try:
@@ -185,3 +227,28 @@ def main(argv: list[str] | None = None) -> int:
                                "free_disk_bytes": shutil.disk_usage(Path.cwd()).free})
         return result.returncode
     return 2
+
+
+def main(argv: list[str] | None = None) -> int:
+    try:
+        return _dispatch(argv)
+    except FileNotFoundError as exc:
+        print(json.dumps({"status": "blocking_input", "error": str(exc)}), file=sys.stderr)
+        return 3
+    except MemoryError as exc:
+        print(json.dumps({"status": "resource_interruption", "error": str(exc), "resumable": True}), file=sys.stderr)
+        return 5
+    except ArithmeticError as exc:
+        print(json.dumps({"status": "invalid_correctness", "error": str(exc)}), file=sys.stderr)
+        return 4
+    except (ValueError, KeyError, TypeError) as exc:
+        print(json.dumps({"status": "invalid_configuration", "error": str(exc)}), file=sys.stderr)
+        return 2
+    except OSError as exc:
+        if exc.errno in (errno.EAGAIN, errno.EWOULDBLOCK):
+            print(json.dumps({"status": "concurrent_writer", "error": str(exc)}), file=sys.stderr)
+            return 2
+        if exc.errno in (errno.ENOSPC, errno.ENOMEM, errno.EDQUOT):
+            print(json.dumps({"status": "resource_interruption", "error": str(exc), "resumable": True}), file=sys.stderr)
+            return 5
+        raise

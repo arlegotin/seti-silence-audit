@@ -86,3 +86,25 @@ def test_cost_only_reduction_in_initial_precision_is_rejected(repo_root, tmp_pat
                                     {}, 1000, (), ("evidence",))
     with pytest.raises(ValueError, match="precision"):
         freeze_protocol(protocol, catalog, schedule, calibration, PilotResult(True, ("evidence",), {}, {}), tmp_path / "results")
+
+
+def test_selected_tests_cannot_supply_research_correctness_evidence(repo_root, tmp_path, monkeypatch):
+    import hashlib
+    from seti_audit.contracts import load_protocol, PilotResult, WeightBounds
+    from seti_audit.data import load_catalog, load_schedule
+    from seti_audit.experiments import freeze_protocol, plan_precision, _identity
+    from seti_audit.artifacts import write_json_atomic
+
+    protocol = load_protocol(repo_root / "config/protocol.json")
+    catalog = load_catalog(repo_root / "docs/blueprint.md", tmp_path / "data")
+    schedule = load_schedule(catalog, tmp_path / "inputs", tmp_path / "data")
+    calibration = plan_precision(protocol, {m.model_id: .1 for m in protocol.models}, {m.model_id: WeightBounds(1., 1.) for m in protocol.models})
+    identity = _identity(protocol, catalog, schedule)
+    calibration = replace(calibration, timings={"identity": identity}, evidence_ids=("fixture",))
+    pilot = PilotResult(True, ("fixture",), {}, {"identity": identity})
+    source = repo_root / "src/seti_audit/model.py"
+    write_json_atomic(tmp_path / "results/correctness.json", {"status": "passed", "scope": "selected", "test_count": 1,
+                                                             "component_hashes": {str(source): hashlib.sha256(source.read_bytes()).hexdigest()}})
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ArithmeticError, match="full correctness"):
+        freeze_protocol(protocol, catalog, schedule, calibration, pilot, tmp_path / "results")
