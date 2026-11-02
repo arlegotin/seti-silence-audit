@@ -1,118 +1,95 @@
 # SETI silence audit
 
-A reproducible research audit of what the UCLA 2020–2023 radio null says about physical arrival within the following 100 years, within a declared finite population and explicit observation models.
+**Does hearing no alien radio signals tell us anything about whether a civilization could reach Earth?**
 
-The question is whether hearing no radio signals narrows the range of physical-arrival probabilities in the declared models. Radio silence and physical safety are different observations. Allowing an invisible counterpart of every model prevents full-family contraction; the conditional radio-bright comparison remains a separate numerical question.
+This repository tests that connection using the published target catalog from
+the UCLA 2020–2023 Green Bank Telescope survey and simulations of civilizations
+expanding between stars. It asks how much the survey's lack of detections changes
+the largest arrival probability among a declared set of hypothetical scenarios.
+The arrival window is the 100 years after the survey.
 
-The [blueprint](docs/blueprint.md), [specification](docs/superpowers/specs/2026-11-02-seti-silence-audit-design.md), and [implementation plan](docs/superpowers/plans/2026-11-02-seti-silence-audit.md) define the experiment. The conditional research calculations are complete. The [independent review and verified fixes](docs/final_review.md) record the final checks. No empirical arrival forecast is claimed.
+[Results](report/REPORT.md) · [Reproduce](REPRODUCE.md) · [Design](docs/blueprint.md) · [Citation](CITATION.cff)
 
-The [evidence report](report/REPORT.md) finds material narrowing for persistent bright emitters: the upper model-risk envelope falls from about 11% to about 4% under the nominal detector, or below 8% across the assumed efficiency interval [.44,.94]. The faster-future-birth control also passes the declared narrowing criterion after matching baseline precision. These are conditional model results, not estimates of the real-world chance of alien visitors.
+## What happened
 
-Under the nominal detector, uncommon compatible emission, a short radio lifetime, and intermittent emission rule out material narrowing by the declared criterion. Invisible counterparts and zero detector response prevent full-family contraction analytically. The matched independent-site comparison gives a similar primary upper envelope, about 4%. Exact scan times and empirical final-selection calibration remain unavailable, so a telescope-calibrated arrival forecast remains unsupported.
+**For strong, persistent radio broadcasters, the upper modeled arrival risk
+falls from roughly 11% to 4% after accounting for the survey's silence.**
+Silence filters out some of the scenarios with higher arrival risk because
+those scenarios would also have been more likely to produce a detectable signal.
 
-Use native Python 3.12 or newer:
+Those percentages describe this finite model family, conditioned on Earth not
+already having been reached. **They aren't estimates of Earth's actual chance
+of alien visitors.** The model includes only the survey's 61 distinct primary
+target sites; the original telescope beams covered about 11,680 stars.
 
-```bash
+The other comparisons matter:
+
+- **Uncertain detector performance:** for persistent broadcasters, the modeled
+  upper risk stays below 8% across the full assumed detection-efficiency range
+  of 44–94%. That range is an assumption, not a measured calibration interval.
+- **Uncommon, short-lived or intermittent broadcasting:** under the nominal
+  detector, the reduction fails the project's declared threshold for a
+  meaningful effect. Allowing an invisible counterpart of every scenario
+  prevents a reduction across the full family.
+- **Interactions between civilizations:** a simpler model treating sites
+  independently also gives an upper risk of about 4% in the main comparison.
+  The extra interaction mechanism doesn't establish a distinct advantage here.
+
+The useful result is knowing which assumptions make the radio observation
+informative about arrival, and where that inference loses its force. Generic
+inference from SETI nondetections already has
+[prior art](docs/blueprint.md#11-what-is-new-enough-to-investigate).
+
+## What came from real observations
+
+The real inputs are the published star positions, distances, observing-date
+ranges and reported nondetection. All **62 catalog rows** were checked against
+the [survey paper](https://arxiv.org/html/2308.02712v4); one target appears twice,
+so the model uses **61 physical sites** and preserves the repeated visit.
+
+Most computation is simulation. The audit varies civilization birth rates,
+expansion speeds, broadcasting behavior and detection assumptions, then compares
+arrival risk before and after conditioning on the radio result.
+
+**Raw telescope recordings were not reanalysed.** The archived candidate CSVs
+were not obtained, complete scan timestamps remain unavailable, and published
+signal-recovery statistics don't establish the probability of passing every
+final detection filter. The saved run therefore uses bounded observing times
+and assumed detector response. A telescope-calibrated forecast remains unsupported.
+
+## Rebuild the report
+
+From a clone, use Python 3.12 and the pinned dependencies:
+
+```sh
+git clone https://github.com/arlegotin/seti-silence-audit.git
+cd seti-silence-audit
 python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.lock.txt
-python -m pip install -e . --no-deps
-python -m seti_audit check
-python -m seti_audit smoke --config config/protocol.json --out results/smoke
+.venv/bin/python -m pip install -r requirements.lock.txt
+.venv/bin/python -m pip install -e . --no-deps
+MPLCONFIGDIR=/tmp/seti-silence-mpl .venv/bin/python -m seti_audit report --protocol results/protocol.lock.json --from-results --out /tmp/seti-silence-report
 ```
 
-Python 3.12 on native ARM64 macOS is the verified environment. `requirements.lock.txt` pins the actual scientific dependencies. `check` runs the complete offline test suite and saves code/test hashes, package versions, output, and a readiness identifier. Selected development checks cannot certify research readiness. The smoke command uses a one-star synthetic history with linked visits and also exercises the tiny ideal/reference paths; its report is explicitly synthetic. Use a fresh smoke output directory after changing the scientific code, since frozen outputs are immutable.
+Open `/tmp/seti-silence-report/REPORT.md`. After installation, reconstruction
+needs no network, new simulations or raw checkpoint store. It reads the committed
+compressed aggregate evidence and regenerates the tables and figures. Generated
+evidence paths and bookkeeping files in the checkout are updated too.
 
-The current input grade is verified published geometry, coarsened timing **F1**, and assumed detector response **F2**. All 62 published rows match the source table, with 61 physical sites after linking the repeated TOI 1730.01 visit. Public archive metadata are accessible, but the tested individual download routes return 401/403; the whole-dataset route reports that ZIP generation is unavailable for this dataset size. Saved evidence is under [inputs](inputs). Expected archive hashes remain metadata expectations until file bytes are verified. Candidate hits alone cannot prove scan completeness, including zero-hit scans.
+The completed audit passes **250 offline tests**:
 
-The current code regenerates the published report from saved aggregate evidence:
-
-```bash
-python -m seti_audit report --protocol results/protocol.lock.json --from-results
+```sh
+.venv/bin/python -m pytest -q
 ```
 
-The published numerical run is pinned to commit `d21192c5428a1681fef1179530e8f06c53dde15b`. Reconstructing or continuing that historical run requires a separate checkout of that commit and its matching raw checkpoint store. The corrected current code has new execution hashes and deliberately rejects those old locks for sampling. Use the current code and a fresh output directory for a new experiment:
+The recorded environment is Python 3.12 on ARM64 macOS. See
+[REPRODUCE.md](REPRODUCE.md) for smoke checks, new experiments, historical code
+pins and the boundary between rebuilding a report and rerunning its simulations.
+The declared audit is complete; the [review record](docs/final_review.md) describes
+the fresh-context AI code review, its three findings and the verified fixes.
 
-```bash
-export SETI_RUN_DIR=results/new-audit
-python -m seti_audit env --out "$SETI_RUN_DIR/environment.json"
-python -m seti_audit acquire --config config/protocol.json
-python -m seti_audit validate-data --config config/protocol.json
-python -m seti_audit theorem-check --config config/protocol.json --out "$SETI_RUN_DIR/theorem"
-python -m seti_audit check
-python -m seti_audit calibrate --config config/protocol.json --out "$SETI_RUN_DIR/calibration.json"
-python -m seti_audit pilot --config config/protocol.json --out "$SETI_RUN_DIR/pilot.json"
-python -m seti_audit freeze --config config/protocol.json --out "$SETI_RUN_DIR" --calibration "$SETI_RUN_DIR/calibration.json" --pilot "$SETI_RUN_DIR/pilot.json"
-python -m seti_audit run --protocol "$SETI_RUN_DIR/protocol.lock.json"
-python -m seti_audit report --protocol "$SETI_RUN_DIR/protocol.lock.json" --from-results
-```
-
-`acquire` streams available sources, records access/integrity failures, and establishes the attained data grade. It does not turn an arbitrary retry count into evidence of unavailability. F1 retains the permitted date intervals and both 150-second ON durations; it invents no scan timestamps. F2 probabilities are detector assumptions, including Dpositive's positive floor. They are not empirical calibration confidence limits.
-
-`theorem-check` independently evaluates the finite-age formulas and the repaired warning expression from the supplied PDF. Its original computation scripts were not attached. `--shell --histories 1000 --phase development` runs a separate development shell check; frozen confirmation includes its own registered shell experiments. Agreement with that continuum reference does not establish its applicability to the stellar catalog.
-
-`calibrate` measures actual clocks, propagation, selection, quadrature, replays, imports, memory, and serialization. Runtime projections guide execution; they never shrink the scientific matrix. `pilot` checks the prescribed development cases and exact positive/null/sign controls. `freeze` requires current complete correctness, calibration, and pilot evidence and binds the inputs, scientific grid, numerical policy, registry, dependencies, code, and seeds.
-
-For the continuous detector-efficiency comparison, the [refined numerical method](docs/continuous_efficiency_refinement.md) avoids the loose history-by-history full-range bound. Finish the current prescribed original checkpoint, verify and freeze the additional method, then run its independent confirmation:
-
-```bash
-python -m seti_audit.refinement checkpoint --protocol "$SETI_RUN_DIR/protocol.lock.json"
-python -m seti_audit check --out "$SETI_RUN_DIR/refinement/correctness.json"
-python -m seti_audit.refinement freeze --protocol "$SETI_RUN_DIR/protocol.lock.json" --out "$SETI_RUN_DIR/refinement"
-python -m seti_audit.refinement run --protocol "$SETI_RUN_DIR/refinement/protocol.lock.json"
-python -m seti_audit report --protocol "$SETI_RUN_DIR/protocol.lock.json" --from-results
-```
-
-Use `--resume` on the refinement `run` command after interruption. Its confidence allowance comes from analytically zero-error ideal-S1 interval allocations, preserving the original total error allowance. It covers the full shared-efficiency interval, preserves original evidence, uses fresh stage-8 streams, and doubles precision as needed. The report keeps the original per-model rows and separately exports refined subdomains and the resulting family envelopes. An original checkpoint labeled `checkpoint_complete_refinement_pending` still requires this additional work.
-
-The published run resolved the remaining close comparison by matching its baseline precision at completed fresh look 4. This uses saved unweighted flags, all 52 declared interacting baselines, and a separate allowance from two analytically certain free-shell CDF endpoints. The complete [method and confidence accounting](docs/continuous_efficiency_refinement.md) explain the combined result. To reconstruct that analysis, use the pinned historical checkout and its matching local checkpoint store:
-
-```python
-from pathlib import Path
-from seti_audit.artifacts import read_json_checked
-from seti_audit.baseline_precision import refine_baselines
-
-root = Path("results").resolve()
-original = read_json_checked(root / "protocol.lock.json") | {"_output_dir": str(root)}
-fresh = read_json_checked(root / "refinement/protocol.lock.json") | {"_output_dir": str(root / "refinement")}
-refine_baselines(original, fresh, root / "refinement/checkpoint-4.json", root / "baseline_precision")
-```
-
-The final report reads the compressed completed checkpoint and matched-baseline artifact directly. It does not require raw trajectories or the local checkpoint store. Original and fresh sampling interruptions, including extra prefetched histories, remain in the resource records; no incomplete look is used for a confidence claim.
-
-The matrix contains 16 primary demographics, four age diagnostics, and 16 same-star ideal settings with paired continuation replays. Future k=0/10 controls cover E1/E0; age diagnostics use E1 and the three point detectors. It is a one-factor robustness design. The source theorem, finite independent-site model, interacting model, and perfect-silence comparator retain their different conditioning and interpretation.
-
-For an interrupted run:
-
-```bash
-python -m seti_audit run --protocol "$SETI_RUN_DIR/protocol.lock.json" --resume
-```
-
-Valid published orphan batches are recovered by hash. Committed counts and seed identities are never duplicated, reset, or discarded. Logical batches have fixed seed streams; memory-sized propagation can use the same clocks. Resume rejects changed inputs, dependencies, code identity, corrupted aggregates, and simultaneous writers. State and the matching local checkpoint store are required to continue a run. Missing stores produce restoration errors before simulation; new stores carry paired durable identities. A torn final resource record is preserved and recovered under lock; corruption in completed records is rejected. Saved aggregate evidence is sufficient to regenerate the report without raw trajectories or archive downloads.
-
-Initial sample sizes are planning checkpoints: 100,000 primary survivors, 25,000 per age/ideal setting, 50,000 mixed-speed proposals, and 10,000 shell histories. Required precision extends through cumulative doubling checkpoints. Each unique interval uses `alpha=A/(M*j*(j+1))`, with .025 for primary decisions and .025 for diagnostics; thresholds reuse intervals. There is no maximum look, project duration, byte quota, launch allowance, repair allowance, or reporting-cell quota. Actual RAM/storage constraints trigger smaller physical work units or a resumable interruption.
-
-An explicit further precision look also preserves the frozen experiment:
-
-```bash
-python -m seti_audit run --protocol "$SETI_RUN_DIR/protocol.lock.json" --resume --extend
-```
-
-Reports consume saved evidence in both forms:
-
-```bash
-python -m seti_audit report --protocol results/protocol.lock.json
-python -m seti_audit report --protocol results/protocol.lock.json --from-results
-```
-
-They produce `report/REPORT.md`, exportable figures, `results/model_rows.json`, CSV tables, family envelopes, evidence paths/hashes, and scoped `conclusions.json`. Missing cells remain unresolved outer-envelope contributors. An excluded family has no conditional risk, not zero risk. Undefined points use null/status fields. Weighted estimates, Monte Carlo intervals, quadrature error, and nuisance bounds remain distinct. All five outcome categories apply per claim; an unfinished calculation remains pending.
-
-Independently resolved or blocked components can be reported before a numerical experiment is frozen:
-
-```bash
-python -m seti_audit report --evidence results/evidence_status.json --from-results
-```
-
-That saved record must identify its `pre_freeze` stage, scoped claims, prerequisites, and evidence paths/hashes. This path creates no protocol lock or numerical confirmation.
-
-Operational records are append-only under `results/`. Durations include nested checks when summed and therefore are not unique wall time. Failed and exploratory work remains in the ledger. `run-logged --stage G1 -- <command>` records additional computational checks. CLI exit codes are 0 for the attained stage, 2 for invalid configuration/lock, 3 for blocking input, 4 for invalid correctness, and 5 for an actual resource interruption with resumable work.
+By **Artem Legotin**. Original software is **AGPL-3.0-only**; original writing and
+result compilations are **CC BY 4.0**, with [separate scopes](LICENSING.md) and
+[upstream attribution](THIRD_PARTY_NOTICES.md). Cite [CITATION.cff](CITATION.cff)
+and record the commit used. Development and reporting used AI assistance under
+Artem Legotin's direction. README editing used
+[write-like-me](https://github.com/arlegotin/write-like-me).
