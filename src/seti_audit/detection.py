@@ -223,7 +223,7 @@ def batch_null_weights(batch, geometry, schedule, emission, detector, visit_depe
         by_site[visit.site_id].append(visit)
     log_low, log_high = np.zeros(count), np.zeros(count)
     zero_low, zero_high = np.zeros(count, dtype=bool), np.zeros(count, dtype=bool)
-    rechecks = 0
+    rechecks, recheck_events = 0, []
     for index, site_id in enumerate(geometry.site_ids):
         rows = np.flatnonzero(batch.accepted_mask[:, index])
         if not len(rows) or not by_site[site_id]:
@@ -262,10 +262,12 @@ def batch_null_weights(batch, geometry, schedule, emission, detector, visit_depe
             exact = source_null_weight(float(birth[j]), radius, schedule, site_id, emission, detector, visit_dependence)
             lower[j], upper[j] = exact.low, exact.high
             rechecks += 1
+            recheck_events.append({"history_index": int(rows[j]), "site_id": site_id,
+                                   "comparisons": list(exact.rechecks)})
         zero_low[rows] |= lower == 0
         zero_high[rows] |= upper == 0
         log_low[rows] += np.log(np.where(lower > 0, lower, 1.))
         log_high[rows] += np.log(np.where(upper > 0, upper, 1.))
     low, high = np.exp(log_low), np.exp(log_high)
     low[zero_low], high[zero_high] = 0., 0.
-    return low, high, {"source_precision_rechecks": rechecks}
+    return low, high, {"source_precision_rechecks": rechecks, "recheck_events": recheck_events}

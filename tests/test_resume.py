@@ -67,3 +67,28 @@ def test_interrupted_progress_counts_usage_once(tmp_path):
     ledger.finish(job, 4., 15)
     assert ledger.usage()["history_evaluations"] == 15
     assert ledger.usage()["elapsed_seconds"] == 4.
+
+
+def test_truncated_last_commit_record_recovers_from_published_hashes(tmp_path):
+    from seti_audit.artifacts import commit_batch, load_committed_batches
+
+    commit_batch(tmp_path, "batch-0", {"protocol_hash": "p"}, {})
+    with (tmp_path / "checkpoints/commits.jsonl").open("ab") as stream:
+        stream.write(b'{"batch_id":')
+    assert len(load_committed_batches(tmp_path, "p")) == 1
+    assert list((tmp_path / "checkpoints").glob("commits.interrupted.*.bin"))
+
+
+def test_failed_directory_publication_can_retry_without_partial_counts(tmp_path, monkeypatch):
+    import seti_audit.storage as storage
+
+    original = storage.os.rename
+    def fail(*args, **kwargs):
+        raise OSError("injected publication interruption")
+    monkeypatch.setattr(storage.os, "rename", fail)
+    with pytest.raises(OSError):
+        storage.commit_batch(tmp_path, "batch-0", {"protocol_hash": "p"}, {})
+    monkeypatch.setattr(storage.os, "rename", original)
+    assert storage.load_committed_batches(tmp_path, "p") == ()
+    storage.commit_batch(tmp_path, "batch-0", {"protocol_hash": "p"}, {})
+    assert len(storage.load_committed_batches(tmp_path, "p")) == 1

@@ -5,11 +5,12 @@ import pytest
 
 
 @pytest.fixture
-def small_protocol(repo_root):
+def small_protocol(repo_root, request):
     from seti_audit.contracts import load_protocol
 
     protocol = load_protocol(repo_root / "config/protocol.json")
-    return replace(protocol, purpose="smoke", models=(protocol.models[0],),
+    model_id = getattr(request, "param", 0)
+    return replace(protocol, purpose="smoke", models=(protocol.models[model_id],),
                    initial_checkpoints={key: 8 for key in protocol.initial_checkpoints})
 
 
@@ -21,7 +22,9 @@ def frozen_smoke(repo_root, tmp_path, small_protocol):
 
     catalog = load_catalog(repo_root / "docs/blueprint.md", tmp_path / "data")
     schedule = load_schedule(catalog, tmp_path / "inputs", tmp_path / "data")
-    calibration = CalibrationResult({0: 8}, {}, 4, 1., {0: .01}, {0: WeightBounds(1., 1.)},
+    model = small_protocol.models[0]
+    mid = model.model_id
+    calibration = CalibrationResult({mid: 8}, {mid: 8} if model.speed_id in ("S3", "S4") else {}, 4, 1., {mid: .01}, {mid: WeightBounds(.1, 1.)},
                                     {"identity": {"phase": "development"}}, 1000, (), ("synthetic-smoke-G2",))
     pilot = PilotResult(True, ("synthetic-smoke-G3",), {"scope": "smoke"}, {})
     return freeze_protocol(small_protocol, catalog, schedule, calibration, pilot, tmp_path / "results")
@@ -57,3 +60,29 @@ def test_resume_rejects_changed_dependency_identity(frozen_smoke, monkeypatch):
     monkeypatch.setattr(experiments, "execution_identity", lambda: {"python": "changed"})
     with pytest.raises(ValueError, match="identity"):
         experiments.verify_protocol_lock(frozen_smoke)
+
+
+def test_changed_source_bytes_block_resume(frozen_smoke, tmp_path, monkeypatch):
+    from seti_audit.experiments import verify_protocol_lock
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs/blueprint.md").write_bytes(b"changed source")
+    with pytest.raises(ValueError, match="[Ss]ource hash"):
+        verify_protocol_lock(frozen_smoke)
+
+
+def test_cost_only_reduction_in_initial_precision_is_rejected(repo_root, tmp_path):
+    from seti_audit.contracts import load_protocol, CalibrationResult, PilotResult, WeightBounds
+    from seti_audit.data import load_catalog, load_schedule
+    from seti_audit.experiments import freeze_protocol
+
+    protocol = load_protocol(repo_root / "config/protocol.json")
+    catalog = load_catalog(repo_root / "docs/blueprint.md", tmp_path / "data")
+    schedule = load_schedule(catalog, tmp_path / "inputs", tmp_path / "data")
+    calibration = CalibrationResult({m.model_id: 25000 for m in protocol.models},
+                                    {m.model_id: 50000 for m in protocol.models if m.speed_id in ("S3", "S4")},
+                                    1024, 1e12, {}, {m.model_id: WeightBounds(.1, 1.) for m in protocol.models},
+                                    {}, 1000, (), ("evidence",))
+    with pytest.raises(ValueError, match="precision"):
+        freeze_protocol(protocol, catalog, schedule, calibration, PilotResult(True, ("evidence",), {}, {}), tmp_path / "results")

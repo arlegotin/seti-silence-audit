@@ -56,3 +56,16 @@ def test_development_cli_records_evidence(repo_root, tmp_path, monkeypatch):
     assert main(["pilot", "--config", str(config), "--histories", "31"]) == 0
     assert read_json_checked(tmp_path / "results/calibration.json")["evidence_ids"]
     assert read_json_checked(tmp_path / "results/pilot.json")["passed"] is True
+
+
+def test_empty_pilot_cannot_certify_mechanism_controls(repo_root, tmp_path):
+    from seti_audit.contracts import load_protocol
+    from seti_audit.experiments import pilot
+    from seti_audit.resources import ResourceLedger
+    from seti_audit.data import load_catalog, load_schedule
+
+    protocol = load_protocol(repo_root / "config/protocol.json")
+    catalog = load_catalog(repo_root / "docs/blueprint.md", tmp_path / "data")
+    schedule = load_schedule(catalog, tmp_path / "inputs", tmp_path / "data")
+    with pytest.raises(ValueError, match="positive|Positive"):
+        pilot(protocol, catalog, schedule, ResourceLedger(tmp_path / "usage.jsonl"), n_histories=0)

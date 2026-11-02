@@ -284,7 +284,8 @@ def sample_shell(config: dict, rng, n_histories: int, ledger) -> ShellSummary:
     if not isinstance(n_histories, int) or n_histories <= 0:
         raise ValueError("Positive trial count required")
     b, s = continuum_mean(h, 1), math.expm1(4 * math.log1p(h)) / 4
-    job, start = ledger.start("G1"), time.perf_counter()
+    details = {"protocol_hash": config["protocol_hash"], "kind": "shell"} if "protocol_hash" in config else {}
+    job, start = ledger.start("G1", details=details), time.perf_counter()
     free_h, free_w, accepted_h, accepted_w = [], [], [], []
     contacts = suppressed = rechecks = 0
     counter = {"point_proposals": 0, "open_uniform_rejections": 0}

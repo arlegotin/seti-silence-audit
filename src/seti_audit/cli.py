@@ -1,6 +1,7 @@
 """Command entry points for reproducible, locally logged research."""
 
 import argparse
+import errno
 import json
 from pathlib import Path
 import resource
@@ -10,7 +11,7 @@ import sys
 import time
 
 from .resources import ResourceLedger, inspect_environment
-from .artifacts import write_json_atomic
+from .artifacts import read_json_checked, write_json_atomic
 from .contracts import load_protocol
 
 
@@ -41,7 +42,63 @@ def main(argv: list[str] | None = None) -> int:
     pilot_command.add_argument("--config", type=Path, default=Path("config/protocol.json"))
     pilot_command.add_argument("--histories", type=int, default=1024)
     pilot_command.add_argument("--out", type=Path, default=Path("results/pilot.json"))
+    freeze = subcommands.add_parser("freeze", help="Freeze scientific matrix, uncertainty and seed identities")
+    freeze.add_argument("--config", type=Path, default=Path("config/protocol.json"))
+    freeze.add_argument("--calibration", type=Path, default=Path("results/calibration.json"))
+    freeze.add_argument("--pilot", type=Path, default=Path("results/pilot.json"))
+    freeze.add_argument("--out", type=Path, default=Path("results"))
+    run = subcommands.add_parser("run", help="Complete or resume the frozen confirmation checkpoints")
+    run.add_argument("--protocol", type=Path, required=True)
+    run.add_argument("--resume", action="store_true")
+    run.add_argument("--extend", action="store_true", help="Resume at the next frozen precision checkpoint")
     options = parser.parse_args(argv)
+    if options.command in {"freeze", "run"}:
+        from .contracts import CalibrationResult, PilotResult, WeightBounds
+        from .experiments import freeze_protocol, request_precision_extension, run_confirmation
+        try:
+            if options.command == "freeze":
+                from .data import load_catalog, load_schedule
+                protocol = load_protocol(options.config)
+                catalog = load_catalog(Path("docs/blueprint.md"), Path("data"))
+                schedule = load_schedule(catalog, Path("inputs"), Path("data"))
+                raw = read_json_checked(options.calibration)
+                for key in ("initial_survivors", "initial_diagnostic_proposals", "proposal_costs"):
+                    raw[key] = {int(k): v for k, v in raw[key].items()}
+                raw["acceptance_bounds"] = {int(k): WeightBounds(v["low"], v["high"]) for k, v in raw["acceptance_bounds"].items()}
+                raw["execution_recommendations"] = tuple(raw["execution_recommendations"])
+                raw["evidence_ids"] = tuple(raw["evidence_ids"])
+                calibration = CalibrationResult(**raw)
+                pilot_raw = read_json_checked(options.pilot)
+                pilot_raw["evidence_ids"] = tuple(pilot_raw["evidence_ids"])
+                lock = freeze_protocol(protocol, catalog, schedule, calibration, PilotResult(**pilot_raw), options.out)
+                result = {"status": "frozen", "purpose": lock["purpose"], "protocol_hash": lock["protocol_hash"], "cells": len(lock["cells"])}
+            else:
+                lock = read_json_checked(options.protocol) | {"_output_dir": str(options.protocol.resolve().parent)}
+                if options.extend:
+                    if not options.resume:
+                        raise ValueError("Precision extension requires --resume")
+                    request_precision_extension(lock)
+                actual = run_confirmation(lock, options.resume, ResourceLedger(options.protocol.parent / "resources.jsonl"))
+                result = {key: actual[key] for key in ("status", "protocol_hash", "analysis_pending", "looks")}
+            print(json.dumps(result))
+            return 0
+        except FileNotFoundError as exc:
+            print(json.dumps({"status": "blocking_input", "error": str(exc)}), file=sys.stderr)
+            return 3
+        except MemoryError as exc:
+            print(json.dumps({"status": "resource_interruption", "error": str(exc), "resumable": True}), file=sys.stderr)
+            return 5
+        except ArithmeticError as exc:
+            print(json.dumps({"status": "invalid_correctness", "error": str(exc)}), file=sys.stderr)
+            return 4
+        except (ValueError, KeyError, TypeError) as exc:
+            print(json.dumps({"status": "invalid_configuration", "error": str(exc)}), file=sys.stderr)
+            return 2
+        except OSError as exc:
+            if exc.errno not in (errno.ENOSPC, errno.ENOMEM, errno.EDQUOT):
+                raise
+            print(json.dumps({"status": "resource_interruption", "error": str(exc), "resumable": True}), file=sys.stderr)
+            return 5
     if options.command in {"calibrate", "pilot"}:
         from dataclasses import asdict
         from .data import load_catalog, load_schedule

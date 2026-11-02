@@ -23,7 +23,8 @@ class ModelConfig:
     future_multiplier: float = 1.0
 
     def __post_init__(self):
-        if (not math.isfinite(self.mu) or self.mu < 0
+        if (not isinstance(self.model_id, Integral) or isinstance(self.model_id, bool) or self.model_id < 0
+                or not math.isfinite(self.mu) or self.mu < 0
                 or not math.isfinite(self.age_years) or self.age_years <= 0
                 or not math.isfinite(self.future_multiplier) or self.future_multiplier < 0
                 or self.speed_id not in {"S1", "S2", "S3", "S4"}):

@@ -24,6 +24,8 @@ def test_complete_matrix_preserves_scientific_combinations(repo_root, tmp_path):
             for emission in ("E1", "E2", "E3", "E4", "E5"):
                 assert {c["detector_id"] for c in main if c["emission_id"] == emission} >= {"Dnom", "Dweak", "Dhigh", "Dpositive", "Duncal"}
     registry = build_bound_registry(cells)
+    assert "shell:0:contact" in registry["items"] and "shell:1:contact" in registry["items"]
+    assert sum(identifier.startswith("shell:") for identifier in registry["items"]) == 34
     for pool, value in registry["pools"].items():
         assert value["A"] == .025
         assert value["M"] == sum(i["pool"] == pool for i in registry["items"].values())

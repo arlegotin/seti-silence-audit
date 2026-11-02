@@ -31,7 +31,8 @@ def test_protocol_preserves_full_scientific_experiment():
         assert hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() == digest
 
 
-@pytest.mark.parametrize("field,value", [("mu", -1), ("speed_id", "S9"), ("age_years", 0)])
+@pytest.mark.parametrize("field,value", [("mu", -1), ("speed_id", "S9"), ("age_years", 0),
+                                        ("model_id", True), ("model_id", 1.5), ("model_id", "1")])
 def test_invalid_demographic_configuration_is_rejected(field, value):
     from seti_audit.contracts import ModelConfig
 

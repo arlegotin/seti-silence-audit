@@ -31,7 +31,8 @@ def _identity(protocol, catalog, schedule):
             "geometry": canonical_hash({"sites": catalog.geometry.site_ids, "xyz": catalog.geometry.xyz_ly.tolist()}),
             "schedule": canonical_hash(asdict(schedule)), "source_hashes": protocol.source_hashes,
             "component_hashes": {name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
-                                 for name in ("model.py", "detection.py", "oracles.py", "inference.py")},
+                                 for name in ("model.py", "detection.py", "oracles.py", "inference.py",
+                                              "experiments.py", "contracts.py", "theorem.py", "resources.py")},
             "phase": "development"}
 
 
@@ -186,6 +187,8 @@ def calibrate(protocol, catalog, schedule, ledger, *, sizes=(1024, 4096, 16384))
 
 
 def pilot(protocol, catalog, schedule, ledger, *, n_histories=1024) -> PilotResult:
+    if not isinstance(n_histories, int) or isinstance(n_histories, bool) or n_histories <= 0:
+        raise ValueError("Positive pilot history count required")
     job, start = ledger.start("G3"), time.perf_counter()
     work, diagnostics = 0, {}
     before = canonical_hash(asdict(protocol))
@@ -345,6 +348,11 @@ def build_bound_registry(cells):
             items[identifier] = {"pool": pool, "quantity": quantity}
         if "survival_interval_id" in cell:
             items[cell["survival_interval_id"]] = {"pool": "diagnostics", "quantity": "acceptance"}
+    for index in (0, 1):
+        items[f"shell:{index}:contact"] = {"pool": "diagnostics", "quantity": "shell_contact"}
+        for z in (.25, .5, .75, 1.):
+            for u in (.25, .5, .75, 1.):
+                items[f"shell:{index}:z{z:g}:u{u:g}"] = {"pool": "diagnostics", "quantity": "shell_joint"}
     return {"items": items, "pools": {name: {"A": .025, "M": sum(i["pool"] == name for i in items.values())}
                                        for name in ("primary", "diagnostics")},
             "checkpoint_rule": "A/(M*j*(j+1))", "thresholds_reuse_intervals": True}
@@ -382,6 +390,15 @@ def _scientific_grid(protocol):
             or protocol.seed_roots != {"development": [20261101, 0], "confirmation": [20261101, 1]}
             or any(e.on_fraction != .1 or e.corr_days != 1 for e in protocol.emissions)):
         raise ValueError("Changed scientific grid or uncertainty policy")
+    minima = {"primary_survivors": 100000, "age_survivors": 25000, "ideal_survivors": 25000,
+              "survival_proposals": 50000, "shell_histories": 10000}
+    if any(protocol.initial_checkpoints.get(key, 0) < value for key, value in minima.items()):
+        raise ValueError("Changed initial precision requires a justified scientific deviation")
+    required = {"quadrature_absolute": 1e-8, "quadrature_relative": 1e-6,
+                "validated_probability_error": 1e-4, "formula_relative": 1e-9}
+    if (protocol.tolerances.get("absolute_narrowing") != .01 or protocol.tolerances.get("relative_narrowing") != .25
+            or any(not 0 < protocol.tolerances.get(key, math.inf) <= value for key, value in required.items())):
+        raise ValueError("Changed scientific tolerances or materiality thresholds")
 
 
 def freeze_protocol(protocol, catalog, schedule, calibration, pilot, output_dir):
@@ -394,6 +411,13 @@ def freeze_protocol(protocol, catalog, schedule, calibration, pilot, output_dir)
         _scientific_grid(protocol)
         if calibration is None or pilot is None or not pilot.passed or not calibration.evidence_ids or not pilot.evidence_ids:
             raise ValueError("Missing correctness/precision-policy evidence")
+        for model in protocol.models:
+            target = protocol.initial_checkpoints["primary_survivors" if model.model_id < 16 else "age_survivors"]
+            if calibration.initial_survivors.get(model.model_id, 0) < target:
+                raise ValueError("Cost-only precision reduction is not an execution strategy")
+            if (model.speed_id in ("S3", "S4") and calibration.initial_diagnostic_proposals.get(model.model_id, 0)
+                    < protocol.initial_checkpoints["survival_proposals"]):
+                raise ValueError("Missing required diagnostic precision")
         identity = _identity(protocol, catalog, schedule)
         if calibration.timings.get("identity") != identity or pilot.diagnostics.get("identity") != identity:
             raise ValueError("Stale calibration/pilot evidence identity")
@@ -436,8 +460,8 @@ def freeze_protocol(protocol, catalog, schedule, calibration, pilot, output_dir)
             "precision_policy": {"cumulative_multiplier": 2, "statistical_interval_width": .01,
                                  "compatibility_error_width": .005, "alpha_rule": "A/(M*j*(j+1))"},
             "rng": {"bit_generator": "PCG64", "root": [20261101, 1],
-                    "stages": {"interacting": 4, "diagnostic": 5, "ideal": 6},
-                    "purposes": {"prefix": 10, "future": 20, "audit": 30, "diagnostic": 40, "ideal": 50},
+                    "stages": {"interacting": 4, "diagnostic": 5, "ideal": 6, "shell": 7},
+                    "purposes": {"prefix": 10, "future": 20, "audit": 30, "diagnostic": 40, "ideal": 50, "shell": 70},
                     "identity": "[20261101,phase,stage_id,model_id,purpose_id,batch_id]"}}
     lock = body | {"protocol_hash": canonical_hash(body)}
     for path, value in ((root / "matrix.json", {"cells": cells}), (root / "bound_registry.json", registry), (root / "protocol.lock.json", lock)):
@@ -449,12 +473,16 @@ def freeze_protocol(protocol, catalog, schedule, calibration, pilot, output_dir)
 
 
 def verify_protocol_lock(lock):
+    import hashlib
     from .artifacts import read_json_checked
     body = {k: v for k, v in lock.items() if k != "protocol_hash" and not k.startswith("_")}
     if canonical_hash(body) != lock["protocol_hash"]:
         raise ValueError("Protocol hash mismatch")
     if execution_identity() != lock["execution_identity"]:
         raise ValueError("Execution identity changed; resume rejected")
+    for name, expected in lock["config"]["source_hashes"].items():
+        if not Path(name).is_file() or hashlib.sha256(Path(name).read_bytes()).hexdigest() != expected:
+            raise ValueError("Source hash mismatch; frozen source input changed")
     root = Path(lock.get("_output_dir", "results"))
     matrix = read_json_checked(root / "matrix.json", lock["matrix_sha256"])
     registry = read_json_checked(root / "bound_registry.json", lock["registry_sha256"])
@@ -466,3 +494,8 @@ def verify_protocol_lock(lock):
 def run_confirmation(protocol_lock, resume, ledger):
     from .runner import run_confirmation as run
     return run(protocol_lock, resume, ledger)
+
+
+def request_precision_extension(protocol_lock, group_ids=None):
+    from .runner import request_precision_extension as request
+    return request(protocol_lock, group_ids)
