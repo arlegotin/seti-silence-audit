@@ -25,6 +25,9 @@ def main(argv: list[str] | None = None) -> int:
     environment.add_argument("--out", type=Path, default=Path("results/environment.json"))
     theorem = subcommands.add_parser("theorem-check", help="Independently verify finite-age continuum formulas")
     theorem.add_argument("--deterministic", action="store_true")
+    theorem.add_argument("--shell", action="store_true", help="Also run the finite-shell suppression reference")
+    theorem.add_argument("--histories", type=int, default=10000)
+    theorem.add_argument("--phase", choices=("development", "confirmation"), default="development")
     theorem.add_argument("--source", type=Path, default=Path("docs/silence_contact_theorem.pdf"))
     theorem.add_argument("--out", type=Path, default=Path("results/theorem"))
     for name in ("acquire", "validate-data"):
@@ -43,6 +46,18 @@ def main(argv: list[str] | None = None) -> int:
             raise
         ledger.finish(job, time.perf_counter() - start, 0,
                       details={"artifact": str(options.out / "deterministic.json")})
+        if options.shell:
+            import numpy as np
+            from .theorem import sample_shell, shell_evidence
+            rows = []
+            for index, h in enumerate((.02, .5)):
+                root = [20261101, 0 if options.phase == "development" else 1, 9, index]
+                sample = sample_shell({"h": h, "alpha": 1, "phase": options.phase},
+                                      np.random.default_rng(root), options.histories, ledger)
+                rows.append(shell_evidence(sample, h) | {"seed": root})
+            write_json_atomic(options.out / f"shell-{options.phase}.json",
+                              {"phase": options.phase, "horizons": rows,
+                               "status": "sampled; uncertainty/validation assessed separately"})
         print(json.dumps({"status": result["status"], "checks": len(result["ratios"])}))
         return 0
     if options.command == "env":

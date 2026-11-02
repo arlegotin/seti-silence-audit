@@ -242,6 +242,21 @@ class OracleResult:
     status: str = "validated"
 
 
+@dataclass(frozen=True)
+class ShellSummary:
+    trials: int
+    contact_count: int
+    censored_count: int
+    b: float
+    s: float
+    free_horizon_fractions: FloatArray
+    free_warning_fractions: FloatArray
+    accepted_horizon_fractions: FloatArray
+    accepted_warning_fractions: FloatArray
+    resource_use: dict
+    diagnostics: dict
+
+
 def load_protocol(path: Path) -> Protocol:
     raw = read_json_checked(path)
     if raw.get("schema_version") != 1:

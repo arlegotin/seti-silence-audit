@@ -8,11 +8,15 @@ not formulas for the finite stellar catalog or the actual telescope survey.
 import hashlib
 import math
 from pathlib import Path
+import time
 
 import mpmath as mp
+import numpy as np
 from scipy.integrate import quad
 
 from .artifacts import write_json_atomic
+from .contracts import ShellSummary
+from .model import _uniform_open
 
 
 def _validate(h, T, d, intensity=1., alpha=1.):
@@ -162,3 +166,171 @@ def check_theorem(source: Path, out: Path) -> dict:
               "interpretation": "Finite-age continuum consistency checks; no catalog/empirical forecast asserted."}
     write_json_atomic(out / "deterministic.json", result)
     return result
+
+
+def _positive_poisson(b, uniform):
+    """One-uniform inverse of Poisson(b) conditional on a positive count."""
+    if not math.isfinite(b) or b <= 0 or not 0 < uniform < 1:
+        raise ValueError("Positive mean and open-interval uniform required")
+    probability = b / math.expm1(b)
+    cumulative, k = probability, 1
+    while True:
+        if abs(uniform - cumulative) < 64 * np.finfo(float).eps * (k + 1):
+            # No rounded CDF cutoff and no artificial maximum random count.
+            with mp.workdps(80):
+                rate, u = mp.mpf(b), mp.mpf(float(uniform))
+                p, count = rate / mp.expm1(rate), 1
+                cdf = p
+                while u > cdf:
+                    count += 1
+                    p *= rate / count
+                    cdf += p
+                return count
+        if uniform <= cumulative:
+            return k
+        k += 1
+        probability *= b / k
+        cumulative += probability
+
+
+def _evaluate_shell(points, h, T=1.):
+    """Chronological continuum points, each a distinct birth (x,y,z,t,q).
+
+    No stellar first-clock reduction is applied. After the horizon, only a
+    censoring statement is valid, since the omitted outside-shell sources can
+    change the global first arrival there.
+    """
+    points = np.asarray(points, dtype=float)
+    if points.ndim != 2 or points.shape[1] != 5 or not len(points) or np.any(~np.isfinite(points)) or np.any(points[:, 4] <= 0):
+        raise ValueError("Finite marked continuum points required")
+    radii = np.linalg.norm(points[:, :3], axis=1)
+    signals = points[:, 3] + radii
+    arrivals = signals + radii * points[:, 4]
+    winner = int(np.argmin(arrivals))
+    accepted, rechecks = [], 0
+    for i in sorted(range(len(points)), key=lambda j: (points[j, 3], j)):
+        keep = True
+        for j in accepted:
+            distance = float(np.linalg.norm(points[j, :3] - points[i, :3]))
+            front = math.fsum((points[j, 3], distance, distance * points[j, 4]))
+            if abs(points[i, 3] - front) < 1e-12 * max(1., abs(front), distance):
+                with mp.workdps(80):
+                    dist = mp.sqrt(sum((mp.mpf(float(x)) - mp.mpf(float(y)))**2
+                                       for x, y in zip(points[j, :3], points[i, :3])))
+                    covered = mp.mpf(float(points[i, 3])) >= mp.mpf(float(points[j, 3])) + dist * (1 + mp.mpf(float(points[j, 4])))
+                rechecks += 1
+            else:
+                covered = points[i, 3] >= front
+            if covered:
+                keep = False
+                break
+        if keep:
+            accepted.append(i)
+    arrival = float(min(arrivals[accepted]))
+    first_signal = float(min(signals[accepted]))
+    contact = arrival <= T + h
+    if abs(arrival - T - h) < 1e-12 * max(1., abs(arrival)):
+        with mp.workdps(80):
+            exact = min(mp.mpf(float(points[i, 3])) + mp.sqrt(sum(mp.mpf(float(x))**2 for x in points[i, :3]))
+                        * (1 + mp.mpf(float(points[i, 4]))) for i in accepted)
+            contact = bool(exact <= mp.mpf(T) + mp.mpf(h))
+            arrival = float(exact)
+        rechecks += 1
+    free_delay = float(arrivals[winner] - T)
+    return {"accepted_indices": accepted, "suppressed_count": len(points) - len(accepted),
+            "free_arrival_delay": free_delay, "free_source_signal_delay": float(signals[winner] - T),
+            "first_potential_signal_delay": float(min(signals) - T),
+            "first_accepted_signal_delay": first_signal - T,
+            "arrival_delay": arrival - T if contact else None, "right_censored": not contact,
+            "free_warning_fraction": float((arrivals[winner] - signals[winner]) / free_delay) if free_delay > 0 else None,
+            "accepted_warning_fraction": (arrival - first_signal) / (arrival - T) if contact and arrival > T else None,
+            "precision_rechecks": rechecks}
+
+
+def _restricted_points(rng, count, h, in_B, probability, counter):
+    selected, remaining = [], count
+    span = math.expm1(4 * math.log1p(h))
+    while remaining:
+        # An expected proposal batch size, never an attempt or precision cap.
+        size = max(32, math.ceil(1.2 * remaining / probability))
+        u, rejected = _uniform_open(rng, size * 3)
+        u = u.reshape(size, 3)
+        counter["open_uniform_rejections"] += rejected
+        D = np.exp(np.log1p(u[:, 0] * span) / 4)
+        radius = D * u[:, 1]**(1 / 3)
+        q = u[:, 2]  # alpha=1, independent of geometry and birth time.
+        is_B = D - 1 + q * radius <= h
+        directions = rng.normal(size=(size, 3))
+        norms = np.linalg.norm(directions, axis=1)
+        while np.any(norms == 0):
+            mask = norms == 0
+            directions[mask] = rng.normal(size=(int(np.sum(mask)), 3))
+            norms[mask] = np.linalg.norm(directions[mask], axis=1)
+        xyz = directions / norms[:, None] * radius[:, None]
+        points = np.column_stack((xyz, D - radius, q))[is_B == in_B]
+        take = min(remaining, len(points))
+        if take:
+            selected.append(points[:take])
+            remaining -= take
+        counter["point_proposals"] += size
+    return np.concatenate(selected) if selected else np.empty((0, 5))
+
+
+def sample_shell(config: dict, rng, n_histories: int, ledger) -> ShellSummary:
+    h = config.get("h")
+    if (config.get("alpha") != 1 or h not in (.02, .5) or config.get("T", 1) != 1
+            or config.get("d", 3) != 3 or config.get("intensity", 1) != 1):
+        raise ValueError("Validated shell construction requires alpha=1, h=.02 or .5, T=1, d=3, intensity=1")
+    if not isinstance(n_histories, int) or n_histories <= 0:
+        raise ValueError("Positive trial count required")
+    b, s = continuum_mean(h, 1), math.expm1(4 * math.log1p(h)) / 4
+    job, start = ledger.start("G1"), time.perf_counter()
+    free_h, free_w, accepted_h, accepted_w = [], [], [], []
+    contacts = suppressed = rechecks = 0
+    counter = {"point_proposals": 0, "open_uniform_rejections": 0}
+    try:
+        for _ in range(n_histories):
+            u, rejects = _uniform_open(rng, 1)
+            counter["open_uniform_rejections"] += rejects
+            nb = _positive_poisson(b, float(u[0]))
+            nc = int(rng.poisson(s - b))
+            points = np.concatenate((_restricted_points(rng, nb, h, True, b / s, counter),
+                                     _restricted_points(rng, nc, h, False, 1 - b / s, counter)))
+            trial = _evaluate_shell(points, h)
+            free_h.append(trial["free_arrival_delay"] / h)
+            free_w.append(trial["free_warning_fraction"])
+            suppressed += trial["suppressed_count"]
+            rechecks += trial["precision_rechecks"]
+            if not trial["right_censored"]:
+                contacts += 1
+                accepted_h.append(trial["arrival_delay"] / h)
+                accepted_w.append(trial["accepted_warning_fraction"])
+    except BaseException as exc:
+        ledger.finish(job, time.perf_counter() - start, len(free_h), status="interrupted",
+                      details=counter | {"exception": type(exc).__name__, "config": config})
+        raise
+    elapsed = time.perf_counter() - start
+    resource_use = counter | {"job_id": job, "elapsed_seconds": elapsed, "history_evaluations": n_histories}
+    ledger.finish(job, elapsed, n_histories, details=counter | {"config": config})
+    return ShellSummary(n_histories, contacts, n_histories - contacts, b, s,
+                        np.array(free_h), np.array(free_w), np.array(accepted_h), np.array(accepted_w),
+                        resource_use, {"suppressed_points": suppressed, "precision_rechecks": rechecks,
+                                       "phase": config.get("phase", "unspecified"),
+                                       "accepted_warning": "first accepted signal to accepted arrival; only within horizon",
+                                       "free_warning": "contacting free source's own warning"})
+
+
+def shell_evidence(summary: ShellSummary, h: float) -> dict:
+    """Small sufficient aggregates, retaining both free and accepted statistics."""
+    joint = [{"z": z, "u": u,
+              "count": int(np.sum((summary.free_horizon_fractions <= z) & (summary.free_warning_fractions <= u))),
+              "exact_cdf": free_joint_cdf(h, z, u, 1)}
+             for z in (.25, .5, .75, 1.) for u in (.25, .5, .75, 1.)]
+    return {"h": h, "alpha": 1, "trials": summary.trials, "contact_count": summary.contact_count,
+            "censored_count": summary.censored_count, "b": summary.b, "s": summary.s,
+            "rigorous_probability_bounds": [summary.b * math.exp(-summary.s), -math.expm1(-summary.b)],
+            "free_accepted_discrepancy_upper": summary.b * summary.s,
+            "free_joint_counts": joint,
+            "accepted_horizon_mean": float(np.mean(summary.accepted_horizon_fractions)) if summary.contact_count else None,
+            "accepted_warning_mean": float(np.mean(summary.accepted_warning_fractions)) if summary.contact_count else None,
+            "resource_use": summary.resource_use, "diagnostics": summary.diagnostics}
