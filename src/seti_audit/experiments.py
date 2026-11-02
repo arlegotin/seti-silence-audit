@@ -196,12 +196,33 @@ def pilot(protocol, catalog, schedule, ledger, *, n_histories=1024) -> PilotResu
     try:
         from .theorem import _evaluate_shell
         phantom = _evaluate_shell(np.array([[1., 0, 0, 0, 9.], [1.1, 0, 0, 1.1, 1 / .9 - 1]]), h=20.)
-        work += 1
+        supported_phantom = _evaluate_shell(np.array([[1., 0, 0, .05, .9], [.9, 0, 0, .25, .01]]), h=.5)
+        # Published prevalence formula is a selection-code limit only.
+        from .contracts import Geometry, Scan, Schedule, EmissionConfig, DetectorConfig
+        from .detection import null_weight
+        xyz = np.array([[1., 0, 0], [-1., 0, 0], [0, 1., 0], [0, -1., 0]])
+        selection_geometry = Geometry(tuple(str(i) for i in range(4)), xyz, np.ones(4),
+                                      np.linalg.norm(xyz[:, None] - xyz[None, :], axis=2))
+        d = 150 / (365.25 * 86400)
+        selection_schedule = Schedule(tuple(Scan(f"v{i}", str(i), j + 1, start, d, "off-target")
+                                            for i in range(4) for j, start in enumerate((-4*d, -2*d))),
+                                      (), "exact", "assumed_F2", {}, {"source_status": "synthetic_control"})
+        selection_history = simulate_history(FirstClocks(np.full(4, -2.), np.full(4, .1), np.full(4, 9.)), selection_geometry)
+        selection_weight = null_weight(selection_history, selection_geometry, selection_schedule,
+                                       EmissionConfig("binomial-control", .25*.2, 0, None, "always"),
+                                       DetectorConfig("binomial-control", .94, .94, False)).low
+        binomial_null = (1 - .25 * .2 * .94)**4
+        work += 3
         dark = accumulate(np.array([True, False]), np.array([1., .06]), np.array([.5, .5]))
         positive = accumulate(np.array([True, False]), np.array([.06, 1.]), np.array([.5, .5]))
         controls = {"fast_dark": {"R0": .5, "likelihood": dark.sum_w / 2, "R": dark.sum_bw / dark.sum_w},
                     "positive": {"R0": .5, "likelihood": positive.sum_w / 2, "R": positive.sum_bw / positive.sum_w},
                     "phantom_suppressed": phantom["suppressed_count"] == 1,
+                    "shell_support_phantom": supported_phantom["suppressed_count"] == 1 and supported_phantom["right_censored"],
+                    "published_binomial_selection": math.isclose(selection_weight, binomial_null, rel_tol=1e-14),
+                    "binomial_selection_evidence": {"n": 4, "f_TX": .25, "duty": .2, "eta": .94,
+                                                    "selection_weight": selection_weight, "binomial_null": binomial_null,
+                                                    "scope": "Synthetic selection-code limit; not physical-arrival inference."},
                     "scalar_batch_matches": True, "null_identity": True, "paired_past_likelihood": True,
                     "common_speed_identity": True, "ideal_silence": True}
         models = [m for m in protocol.models if (m.mu == 1 and m.speed_id == "S1" and m.age_years == 10000)

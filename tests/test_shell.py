@@ -43,6 +43,21 @@ def test_shell_right_censoring_does_not_report_global_late_contact():
     assert result["free_arrival_delay"] > .5
 
 
+def test_forced_phantom_inside_confirmatory_shell_support():
+    from seti_audit.theorem import _evaluate_shell
+
+    points = np.array([[1., 0, 0, .05, .9], [.9, 0, 0, .25, .01]])
+    assert np.all((points[:, 4] > 0) & (points[:, 4] < 1))
+    signals = np.linalg.norm(points[:, :3], axis=1) + points[:, 3]
+    assert np.all((signals > 1) & (signals < 1.5))
+    result = _evaluate_shell(points, h=.5)
+    assert result["free_arrival_delay"] == pytest.approx(.159)
+    assert result["suppressed_count"] == 1
+    assert result["accepted_indices"] == [0]
+    assert result["right_censored"] is True
+    assert result["first_potential_signal_delay"] == result["first_accepted_signal_delay"]
+
+
 @pytest.mark.parametrize("h", [.02, .5])
 def test_restricted_shell_matches_finite_horizon_free_law_and_rigorous_bounds(tmp_path, h):
     from seti_audit.resources import ResourceLedger

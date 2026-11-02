@@ -22,6 +22,15 @@ def test_complete_smoke_confirmation_and_repeat_resume_are_identical(frozen_smok
     total = result["execution_totals"]["groups"]["interacting:0"]
     assert total["sampled_histories"] == total["attempted_proposals"] == 8
     assert total["history_evaluations"] >= 32
+    replay = next(b for b in result["replay_samples"] if b["group_id"] == "interacting:0")
+    from seti_audit.contracts import FirstClocks, Geometry
+    from seti_audit.model import simulate_history
+    import numpy as np
+    history = simulate_history(FirstClocks(np.array([np.inf if x is None else x for x in replay["birth_years"]]),
+                                           np.array(replay["speeds"]), np.array(replay["speed_gaps"])),
+                               Geometry(**frozen_smoke["geometry"]))
+    assert history.accepted_indices.tolist() == replay["accepted_indices"]
+    assert history.arrives_within_horizon == replay["arrives_within_horizon"]
     usage = ledger.usage()
     repeated = run_confirmation(frozen_smoke, True, ledger)
     assert repeated == result

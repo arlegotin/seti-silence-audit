@@ -34,6 +34,11 @@ def test_tiny_calibration_and_pilot_preserve_protocol(repo_root, tmp_path):
     calibration = calibrate(protocol, catalog, schedule, ledger, sizes=(16, 33))
     result = pilot(protocol, catalog, schedule, ledger, n_histories=31)
     assert result.passed
+    assert result.controls["published_binomial_selection"] is True
+    assert result.controls["shell_support_phantom"] is True
+    selection = result.controls["binomial_selection_evidence"]
+    assert selection["selection_weight"] == pytest.approx((1 - .25 * .2 * .94)**4)
+    assert selection["selection_weight"] == pytest.approx(selection["binomial_null"])
     assert calibration.timings["records"]
     assert calibration.evidence_ids and result.evidence_ids
     assert canonical_hash(asdict(protocol)) == before

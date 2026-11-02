@@ -152,6 +152,23 @@ def _compute_batch(lock, group, index, count, look, objects, ledger):
             future_rng, roots["future"] = _rng(kind, mid, 20, index, phase)
             multipliers = (0., 1., 10.) if mid < 16 else (1.,)
             futures = paired_future_batches(prefix, model, geometry, future_rng, multipliers)
+            if index == 0:
+                from .model import history_at
+                candidates = np.flatnonzero(np.any(futures[1.].accepted_mask, axis=1))
+                sample_index = int(candidates[0]) if len(candidates) else 0
+                sample = history_at(futures[1.], sample_index)
+                finite_list = lambda values: [float(x) if math.isfinite(x) else None for x in values]
+                extra["replay_sample"] = {
+                    "group_id": f"{kind}:{mid}", "batch_index": index, "history_index": sample_index,
+                    "selection": "First nonempty history in initial batch, otherwise history zero; diagnostic only.",
+                    "k": 1., "site_ids": list(geometry.site_ids), "birth_years": finite_list(sample.birth_years),
+                    "speeds": finite_list(sample.speeds), "speed_gaps": finite_list(sample.speed_gaps),
+                    "occupation_years": finite_list(sample.occupation_years),
+                    "accepted_indices": sample.accepted_indices.tolist(),
+                    "arrival_year": float(sample.arrival_year) if math.isfinite(sample.arrival_year) else None,
+                    "arrives_within_horizon": sample.arrives_within_horizon,
+                    "right_censored": sample.right_censored,
+                    "null_encodes": "No birth/occupation or no finite arrival; use explicit horizon flags."}
             work += count * len(multipliers)
             note_clock(futures[1.].diagnostics.get("batch_clock_diagnostics", {}).get("mark_diagnostics", {}))
             for k, history in futures.items():
@@ -517,6 +534,8 @@ def run_confirmation(protocol_lock, resume, ledger):
                   "attempted_proposals": sum(b["attempts"] for b in batches if b["group_id"] == key),
                   "history_evaluations": sum(b["history_evaluations"] + b.get("nested_history_evaluations", 0)
                                              for b in batches if b["group_id"] == key)} for key in groups}}
+        result["replay_samples"] = [b["replay_sample"] | {"seed_roots": b["seed_roots"], "batch_hash": b["_batch_hash"]}
+                                    for b in batches if "replay_sample" in b]
         result["content_hash"] = canonical_hash(result)
         write_json_atomic(final_path, result)
         return read_json_checked(final_path)
